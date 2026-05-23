@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AtomicFlow — Habit Tracker & Journal</title>
+    
+    <!-- Meta tags for premium SEO & branding -->
+    <meta name="description" content="AtomicFlow is a premium, glassmorphic habit tracker & daily micro-journal based on 'Atomic Habits' by James Clear, featuring cloud Google Sheets sync.">
+    <meta name="theme-color" content="#090d16">
+    
+    <!-- Design System Core Style Sheets -->
+    <link rel="stylesheet" href="css/variables.css">
+    <link rel="stylesheet" href="css/base.css">
+    <link rel="stylesheet" href="css/layout.css">
+    <link rel="stylesheet" href="css/components.css">
+    <link rel="stylesheet" href="css/animations.css">
+    
+    <!-- External Interactive CDNs (Preloaded/Prefetched) -->
+    <!-- Lucide Sleek Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Premium Charting Engine -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Satisfying Confetti Engine -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+</head>
+<body>
+    
+    <!-- Main Application Wrapper -->
+    <div class="app-wrapper">
+        
+        <!-- Left Sidebar Navigation -->
+        <aside class="app-sidebar">
+            <div class="brand-section">
+                <div class="brand-icon">
+                    <i data-lucide="sparkles" style="width: 22px; height: 22px;"></i>
+                </div>
+                <span class="brand-name">AtomicFlow</span>
+            </div>
+
+            <!-- Dynamic Sidebar Habit progress ring -->
+            <div class="sidebar-progress-card">
+                <div class="progress-ring-container">
+                    <svg width="56" height="56">
+                        <circle stroke="rgba(255,255,255,0.05)" stroke-width="4" fill="transparent" r="18" cx="28" cy="28"/>
+                        <circle class="progress-ring-circle" stroke="url(#sidebar-grad)" stroke-width="5" stroke-linecap="round" fill="transparent" r="18" cx="28" cy="28" 
+                            stroke-dasharray="113" stroke-dashoffset="113"/>
+                        <defs>
+                            <linearGradient id="sidebar-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" stop-color="#6366f1" />
+                                <stop offset="100%" stop-color="#a855f7" />
+                            </linearGradient>
+                        </defs>
+                    </svg>
+                    <div class="progress-percentage">0%</div>
+                </div>
+                <div class="progress-info">
+                    <h4>Flow Level</h4>
+                    <p>0 of 0 habits met today</p>
+                </div>
+            </div>
+
+            <!-- Main Navigation Links -->
+            <nav class="sidebar-nav">
+                <a href="#dashboard" class="nav-link active" data-view="dashboard">
+                    <i data-lucide="layout-dashboard"></i>
+                    <span>Dashboard</span>
+                </a>
+                <a href="#journal" class="nav-link" data-view="journal">
+                    <i data-lucide="book-open"></i>
+                    <span>Journal Logs</span>
+                </a>
+                <a href="#blueprint" class="nav-link" data-view="blueprint">
+                    <i data-lucide="fingerprint"></i>
+                    <span>Blueprints</span>
+                </a>
+                <a href="#analytics" class="nav-link" data-view="analytics">
+                    <i data-lucide="bar-chart-2"></i>
+                    <span>Analytics</span>
+                </a>
+                <a href="#settings" class="nav-link" data-view="settings">
+                    <i data-lucide="sliders"></i>
+                    <span>Settings</span>
+                </a>
+            </nav>
+
+            <!-- Sidebar footer / Quick theme info -->
+            <div class="sidebar-footer">
+                <div style="display: flex; align-items: center; justify-content: space-between; font-size: 0.75rem; color: var(--sidebar-text-muted);">
+                    <span class="theme-label">Atomic Tracker v1.0</span>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Right Content Section -->
+        <main class="app-content">
+            <!-- App Main Core Header -->
+            <header class="content-header">
+                <div class="welcome-msg">
+                    <h1>Good morning, <span class="text-gradient">Achiever</span>!</h1>
+                    <p>Focus on systems, not outcomes. Today is a new vote.</p>
+                </div>
+                <div class="header-actions">
+                    <div class="date-indicator">
+                        <i data-lucide="calendar" style="width: 16px; height: 16px; color: var(--primary);"></i>
+                        <span>May 24</span>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Core Route Views Mount Root -->
+            <div id="view-content-root" class="animate-fade-in" style="width: 100%;">
+                <!-- Dynamic component injections render here -->
+            </div>
+        </main>
+        
+    </div>
+
+    <!-- Application Module Entry Point -->
+    <script src="js/app.js"></script>
+</body>
+</html>
