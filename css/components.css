@@ -47,23 +47,30 @@
     gap: 0.5rem;
     padding: 0.65rem 1.25rem;
     font-family: var(--font-body);
-    font-weight: 600;
+    font-weight: 700;
     font-size: 0.9rem;
     border-radius: var(--radius-md);
     border: 1px solid transparent;
     cursor: pointer;
     transition: all var(--transition-fast);
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.btn:active {
+    transform: scale(0.97);
 }
 
 .btn-primary {
     background: var(--grad-primary);
-    color: #ffffff;
-    box-shadow: 0 4px 15px rgba(99, 102, 241, 0.3);
+    color: #0d0d0f; /* High contrast black text against lime */
+    box-shadow: 0 4px 14px rgba(184, 240, 100, 0.15);
 }
 
 .btn-primary:hover {
+    background: var(--primary-dark);
     transform: translateY(-1px);
-    box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4);
+    box-shadow: 0 8px 24px rgba(184, 240, 100, 0.25);
 }
 
 .btn-secondary {
@@ -152,12 +159,17 @@ textarea.form-control {
 
 .habit-card:hover {
     transform: translateY(-3px);
-    box-shadow: 0 10px 30px rgba(31, 38, 135, 0.08);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+}
+
+.habit-card:active {
+    transform: scale(0.98) translateY(0);
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
 }
 
 .habit-card.completed {
-    background: rgba(16, 185, 129, 0.03);
-    border-color: rgba(16, 185, 129, 0.2);
+    background: rgba(184, 240, 100, 0.03);
+    border-color: rgba(184, 240, 100, 0.2);
 }
 
 .habit-card.completed::before {
@@ -205,9 +217,9 @@ textarea.form-control {
 .checkbox-wrapper input:checked ~ .checkmark {
     background: var(--grad-success);
     border-color: transparent;
-    color: #ffffff;
+    color: #0d0d0f; /* Crisp black checkmark */
     transform: scale(1.12);
-    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.35);
+    box-shadow: 0 4px 12px rgba(184, 240, 100, 0.35); /* Neon lime glow */
 }
 
 .checkmark i {
@@ -411,72 +423,65 @@ textarea.form-control {
     font-size: 0.85rem;
 }
 
-/* Daily Mood Slider & Scale Component */
-.mood-picker {
+/* Daily Mood & Energy Selection Components */
+.mood-picker, .energy-picker {
     display: flex;
     justify-content: space-between;
     gap: 0.5rem;
     margin-bottom: 1.5rem;
 }
 
-.mood-option {
+.mood-btn {
     flex: 1;
     background: var(--bg-primary);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-md);
-    padding: 0.75rem 0.25rem;
+    padding: 10px 4px;
     text-align: center;
     cursor: pointer;
-    font-size: 1.75rem;
+    font-size: 22px;
+    transition: all var(--transition-fast);
     display: flex;
-    flex-direction: column;
     align-items: center;
-    gap: 4px;
+    justify-content: center;
+}
+
+.mood-btn:hover {
+    transform: scale(1.05);
+    border-color: var(--text-secondary);
+}
+
+.mood-btn.sel {
+    border-color: var(--primary) !important;
+    background: var(--sidebar-active-bg) !important;
+    transform: scale(1.08);
+}
+
+.energy-btn {
+    flex: 1;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 10px 4px;
+    font-family: var(--font-heading);
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--text-secondary);
+    text-align: center;
+    cursor: pointer;
     transition: all var(--transition-fast);
 }
 
-.mood-label {
-    font-size: 0.75rem;
-    font-weight: 600;
-    color: var(--text-secondary);
+.energy-btn:hover {
+    border-color: var(--text-secondary);
+    color: var(--text-primary);
 }
 
-.mood-option:hover {
-    transform: translateY(-2px);
-    border-color: var(--primary);
-    background: rgba(99, 102, 241, 0.05);
-}
-
-.mood-option.active[data-mood="1"] { background: rgba(239, 68, 68, 0.15); border-color: #ef4444; }
-.mood-option.active[data-mood="2"] { background: rgba(245, 158, 11, 0.15); border-color: #f59e0b; }
-.mood-option.active[data-mood="3"] { background: rgba(59, 130, 246, 0.15); border-color: #3b82f6; }
-.mood-option.active[data-mood="4"] { background: rgba(16, 185, 129, 0.15); border-color: #10b981; }
-.mood-option.active[data-mood="5"] { background: rgba(139, 92, 246, 0.15); border-color: #8b5cf6; }
-
-/* Custom Sliders (Energy Rating) */
-.custom-range {
-    -webkit-appearance: none;
-    width: 100%;
-    height: 6px;
-    border-radius: 5px;
-    background: var(--border-color);
-    outline: none;
-}
-
-.custom-range::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    appearance: none;
-    width: 18px;
-    height: 18px;
-    border-radius: 50%;
-    background: var(--grad-primary);
-    cursor: pointer;
-    box-shadow: 0 2px 6px rgba(99, 102, 241, 0.4);
-    transition: transform var(--transition-fast);
-}
-
-.custom-range::-webkit-slider-thumb:hover {
-    transform: scale(1.2);
+.energy-btn.sel {
+    border-color: var(--primary) !important;
+    background: var(--sidebar-active-bg) !important;
+    color: var(--primary) !important;
+    transform: scale(1.08);
 }
 
 /* Theme Switcher Button Group */
@@ -832,3 +837,16 @@ textarea.form-control {
     color: var(--sidebar-text-muted);
     font-weight: 600;
 }
+
+/* Custom info box styling for anxiety parking lot */
+.info-box {
+    background: var(--sidebar-active-bg);
+    border: 1px solid rgba(184, 240, 100, 0.15);
+    border-radius: var(--radius-md);
+    padding: 12px 14px;
+    font-size: 0.8rem;
+    color: var(--primary);
+    line-height: 1.6;
+    margin-top: 10px;
+}
+

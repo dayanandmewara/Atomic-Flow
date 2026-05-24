@@ -1235,7 +1235,7 @@ const Dashboard = {
 const Journal = {
     selectedDate: new Date().toISOString().split('T')[0],
     activeMood: 0,
-    wins: [],
+    activeEnergy: 3,
 
     render(container) {
         this.selectedDate = new Date().toISOString().split('T')[0];
@@ -1246,15 +1246,11 @@ const Journal = {
     loadDateLog() {
         const log = db.getLogForDate(this.selectedDate);
         this.activeMood = log.mood || 0;
-        this.wins = log.wins || [];
+        this.activeEnergy = log.energy || 3;
         this.updateView(log);
     },
 
     updateView(log) {
-        const energyLevels = ["Exhausted", "Tired", "Balanced", "Energetic", "Supercharged!"];
-        const currentEnergyVal = log.energy || 3;
-        const quickWinTags = ["🎯 Met Habits", "🥗 Ate Clean", "😴 Slept 8 Hrs", "💻 Highly Focused", "🚶 Exercised", "❤️ Contacted Friend"];
-
         // V5 Enhanced Journal: Retrieve active habits and calculate compliance list
         const habits = db.getHabits();
         const completions = log.completions || {};
@@ -1277,6 +1273,12 @@ const Journal = {
             `;
         }).join('') || `<div style="font-size: 0.8rem; color: var(--text-muted); text-align: center; font-style: italic; padding: 0.5rem 0;">No active habits set for this day.</div>`;
 
+        const winsText = Array.isArray(log.wins) ? log.wins.join('\n') : (log.wins || '');
+        const hardText = log.hard || '';
+        const anxietyText = log.anxiety || '';
+        const tomorrowText = log.tomorrow || log.improvement || '';
+        const freeText = log.journalNotes || log.free || '';
+
         this.container.innerHTML = `
             <div class="animate-fade-in" style="width: 100%;">
                 <div class="view-grid">
@@ -1296,53 +1298,39 @@ const Journal = {
                         </div>
 
                         <!-- Mood Card -->
-                        <div class="glass-card" style="border-radius: var(--radius-md);">
-                            <h3 class="card-title" style="margin-bottom: 1.25rem; font-weight: 500;">
-                                <i data-lucide="smile" style="color: var(--primary); width: 18px; height: 18px;"></i> Daily Mood Rating
+                        <div class="glass-card" style="border-radius: var(--radius-md); padding: 1.25rem;">
+                            <h3 class="card-title" style="margin-bottom: 1rem; font-weight: 500; font-size: 0.95rem;">
+                                <i data-lucide="smile" style="color: var(--primary); width: 18px; height: 18px;"></i> How are you feeling right now?
                             </h3>
-                            <div class="mood-picker">
-                                <div class="mood-option ${this.activeMood === 1 ? 'active' : ''}" data-mood="1" style="border-radius: 8px;">
-                                    <span>😢</span>
-                                    <span class="mood-label">Sad</span>
-                                </div>
-                                <div class="mood-option ${this.activeMood === 2 ? 'active' : ''}" data-mood="2" style="border-radius: 8px;">
-                                    <span>😕</span>
-                                    <span class="mood-label">Low</span>
-                                </div>
-                                <div class="mood-option ${this.activeMood === 3 ? 'active' : ''}" data-mood="3" style="border-radius: 8px;">
-                                    <span>😐</span>
-                                    <span class="mood-label">Okay</span>
-                                </div>
-                                <div class="mood-option ${this.activeMood === 4 ? 'active' : ''}" data-mood="4" style="border-radius: 8px;">
-                                    <span>🙂</span>
-                                    <span class="mood-label">Good</span>
-                                </div>
-                                <div class="mood-option ${this.activeMood === 5 ? 'active' : ''}" data-mood="5" style="border-radius: 8px;">
-                                    <span>😄</span>
-                                    <span class="mood-label">Great</span>
-                                </div>
+                            <div class="mood-picker" id="mood-row">
+                                <button class="mood-btn ${this.activeMood === 1 ? 'sel' : ''}" data-mood="1">😔</button>
+                                <button class="mood-btn ${this.activeMood === 2 ? 'sel' : ''}" data-mood="2">😐</button>
+                                <button class="mood-btn ${this.activeMood === 3 ? 'sel' : ''}" data-mood="3">🙂</button>
+                                <button class="mood-btn ${this.activeMood === 4 ? 'sel' : ''}" data-mood="4">😊</button>
+                                <button class="mood-btn ${this.activeMood === 5 ? 'sel' : ''}" data-mood="5">😄</button>
                             </div>
                         </div>
 
                         <!-- Energy Card -->
-                        <div class="glass-card" style="border-radius: var(--radius-md);">
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.25rem;">
-                                <h3 class="card-title" style="font-weight: 500;"><i data-lucide="zap" style="color: var(--color-warning); width: 18px; height: 18px;"></i> Energy Level</h3>
-                                <span id="energy-badge" class="badge" style="background: var(--sidebar-active-bg); color: var(--primary); padding: 2px 8px; border-radius: 8px; font-size: 0.72rem; font-weight: 700; border: 1px solid var(--border-color);">
-                                    ${energyLevels[currentEnergyVal - 1]}
-                                </span>
+                        <div class="glass-card" style="border-radius: var(--radius-md); padding: 1.25rem;">
+                            <h3 class="card-title" style="margin-bottom: 1rem; font-weight: 500; font-size: 0.95rem;">
+                                <i data-lucide="zap" style="color: var(--color-warning); width: 18px; height: 18px;"></i> Energy level today
+                            </h3>
+                            <div class="energy-picker" id="nrg-row">
+                                <button class="energy-btn ${this.activeEnergy === 1 ? 'sel' : ''}" data-energy="1">1</button>
+                                <button class="energy-btn ${this.activeEnergy === 2 ? 'sel' : ''}" data-energy="2">2</button>
+                                <button class="energy-btn ${this.activeEnergy === 3 ? 'sel' : ''}" data-energy="3">3</button>
+                                <button class="energy-btn ${this.activeEnergy === 4 ? 'sel' : ''}" data-energy="4">4</button>
+                                <button class="energy-btn ${this.activeEnergy === 5 ? 'sel' : ''}" data-energy="5">5</button>
                             </div>
-                            <div style="padding: 0.5rem 0;">
-                                <input type="range" id="energy-range-input" class="custom-range" min="1" max="5" value="${currentEnergyVal}">
-                                <div style="display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--text-muted); margin-top: 10px; font-weight: 600;">
-                                    <span>1 (Exhausted)</span>
-                                    <span>3 (Balanced)</span>
-                                    <span>5 (Peak)</span>
-                                </div>
+                            <div style="display: flex; justify-content: space-between; font-size: 0.72rem; color: var(--text-muted); font-weight: 600; margin-top: 6px; padding: 0 4px;">
+                                <span>1 (Exhausted)</span>
+                                <span>3 (Balanced)</span>
+                                <span>5 (Peak)</span>
                             </div>
                         </div>
 
-                        <!-- V5 Today's Habit Compliance Panel -->
+                        <!-- Today's Habit Compliance Panel -->
                         <div class="glass-card" style="border-radius: var(--radius-md); padding: 1.25rem;">
                             <h3 class="card-title" style="margin-bottom: 0.75rem; font-weight: 500; font-size: 0.95rem; display: flex; justify-content: space-between; align-items: center;">
                                 <span style="display: flex; align-items: center; gap: 6px;"><i data-lucide="check-square" style="color: var(--primary); width: 18px; height: 18px;"></i> Routine Compliance</span>
@@ -1369,63 +1357,34 @@ const Journal = {
                             </div>
 
                             <div class="form-group" style="margin-bottom: 1.25rem;">
-                                <label style="font-size: 0.8rem;">Frictionless Win Chips</label>
-                                <div class="win-chips-container">
-                                    ${quickWinTags.map(tag => {
-                                        const isActive = this.wins.includes(tag);
-                                        return `<div class="win-chip ${isActive ? 'active' : ''}" data-tag="${tag}" style="border-radius: 12px; padding: 4px 10px; font-size: 0.78rem;">+ ${tag}</div>`;
-                                    }).join('')}
-                                </div>
+                                <label style="font-size: 0.8rem;">Today's win 🏆</label>
+                                <textarea class="form-control" id="j-wins" placeholder="What went well? Any habit that felt automatic?" style="border-radius: 8px; padding: 0.65rem 0.75rem; font-size: 0.85rem; width: 100%; min-height: 80px; resize: vertical;">${winsText}</textarea>
                             </div>
 
                             <div class="form-group" style="margin-bottom: 1.25rem;">
-                                <label style="font-size: 0.8rem; display: flex; justify-content: space-between;">
-                                    <span>Other Daily Wins (1% Better)</span>
-                                </label>
-                                <div style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem;">
-                                    <input type="text" id="win-input" class="form-control" placeholder="e.g. Cleaned kitchen counter" style="flex: 1; padding: 0.5rem 0.75rem; font-size: 0.85rem; border-radius: 8px;">
-                                    <button class="btn btn-secondary" id="btn-add-win" style="padding: 0.5rem 0.75rem; border-radius: 8px; font-size: 0.85rem;"><i data-lucide="plus"></i> Add</button>
-                                </div>
-                                <ul id="wins-list" style="list-style: none; display: flex; flex-direction: column; gap: 6px;">
-                                    ${this._renderWinsList()}
-                                </ul>
-                            </div>
-
-                            <!-- Highlight of the Day (The #1 win) -->
-                            <div class="form-group" style="margin-bottom: 1.25rem;">
-                                <label style="font-size: 0.8rem; display: flex; align-items: center; gap: 4px;">
-                                    <i data-lucide="award" style="color: var(--color-warning); width: 14px; height: 14px;"></i> Highlight of the Day (The #1 Home Win)
-                                </label>
-                                <input type="text" id="highlight-input" class="form-control" value="${log.highlight || ''}" placeholder="e.g. Maintained room tidiness and read atomic habits before bed!" style="padding: 0.5rem 0.75rem; font-size: 0.85rem; border-radius: 8px;">
+                                <label style="font-size: 0.8rem;">What was hard 💪</label>
+                                <textarea class="form-control" id="j-hard" placeholder="Any friction, struggle, or habit you skipped?" style="border-radius: 8px; padding: 0.65rem 0.75rem; font-size: 0.85rem; width: 100%; min-height: 80px; resize: vertical;">${hardText}</textarea>
                             </div>
 
                             <div class="form-group" style="margin-bottom: 1.25rem;">
-                                <label style="font-size: 0.8rem;">Tomorrow's Friction Reduction (Make it Easy)</label>
-                                <input type="text" id="improvement-input" class="form-control" value="${log.improvement || ''}" placeholder="e.g. Lay room reset basket right next to the doorway" style="padding: 0.5rem 0.75rem; font-size: 0.85rem; border-radius: 8px;">
+                                <label style="font-size: 0.8rem;">Anxiety parking lot 🅿️</label>
+                                <textarea class="form-control" id="j-anxiety" placeholder="Park thoughts here — things to look up tomorrow, not tonight…" style="border-radius: 8px; padding: 0.65rem 0.75rem; font-size: 0.85rem; width: 100%; min-height: 80px; resize: vertical;">${anxietyText}</textarea>
                             </div>
 
-                            <!-- Atomic Reflection Prompt inject buttons -->
                             <div class="form-group" style="margin-bottom: 1.25rem;">
-                                <label style="font-size: 0.8rem;">Reflections Helper (Tap to insert structured prompt)</label>
-                                <div style="display: flex; flex-wrap: wrap; gap: 6px;">
-                                    <button type="button" class="btn btn-secondary btn-prompt" data-prompt="IdentityProof" style="font-size: 0.72rem; padding: 4px 8px; border-radius: 12px; background: transparent; border-color: var(--border-color); color: var(--text-secondary);">
-                                        🎯 Identity Proof
-                                    </button>
-                                    <button type="button" class="btn btn-secondary btn-prompt" data-prompt="FrictionReduce" style="font-size: 0.72rem; padding: 4px 8px; border-radius: 12px; background: transparent; border-color: var(--border-color); color: var(--text-secondary);">
-                                        ⚡ Friction Reduction
-                                    </button>
-                                    <button type="button" class="btn btn-secondary btn-prompt" data-prompt="EnvironmentalCue" style="font-size: 0.72rem; padding: 4px 8px; border-radius: 12px; background: transparent; border-color: var(--border-color); color: var(--text-secondary);">
-                                        👁️ Obvious Cues
-                                    </button>
-                                    <button type="button" class="btn btn-secondary btn-prompt" data-prompt="StrugglesTriumphs" style="font-size: 0.72rem; padding: 4px 8px; border-radius: 12px; background: transparent; border-color: var(--border-color); color: var(--text-secondary);">
-                                        📈 Struggles & Progress
-                                    </button>
-                                </div>
+                                <label style="font-size: 0.8rem;">Intention for tomorrow 🌅</label>
+                                <textarea class="form-control" id="j-tomorrow" placeholder="One thing to focus on or do differently…" style="border-radius: 8px; padding: 0.65rem 0.75rem; font-size: 0.85rem; width: 100%; min-height: 80px; resize: vertical;">${tomorrowText}</textarea>
                             </div>
+
+                            <div style="border-top: 1px dashed var(--border-color); margin: 1.5rem 0;"></div>
 
                             <div class="form-group" style="margin-bottom: 0;">
-                                <label style="font-size: 0.8rem;">Freeform Reflections (Google Keep Style Notes)</label>
-                                <textarea id="reflections-textarea" class="form-control" style="border-radius: 8px; padding: 0.65rem 0.75rem; font-size: 0.85rem;" placeholder="Write any thoughts, struggles, or positive observations...">${log.journalNotes || ''}</textarea>
+                                <label style="font-size: 0.8rem;">Free writing 📝</label>
+                                <textarea id="reflections-textarea" class="form-control" style="border-radius: 8px; padding: 0.65rem 0.75rem; font-size: 0.85rem; width: 100%; min-height: 120px; resize: vertical;" placeholder="Thoughts, feelings, gratitude, observations, anything…">${freeText}</textarea>
+                            </div>
+
+                            <div class="info-box">
+                                <strong>Anxiety parking lot</strong> — when an urge to doomscroll or research something hits in the evening, write it here instead. Deal with it tomorrow during daylight hours.
                             </div>
                         </div>
                     </div>
@@ -1443,27 +1402,6 @@ const Journal = {
 
         lucide.createIcons();
         this._setupListeners();
-    },
-
-    _renderWinsList() {
-        const customWins = this.wins.filter(w => !["🎯 Met Habits", "🥗 Ate Clean", "😴 Slept 8 Hrs", "💻 Highly Focused", "🚶 Exercised", "❤️ Contacted Friend"].includes(w));
-        
-        if (customWins.length === 0) {
-            return `
-                <li id="no-wins-msg" style="font-size: 0.8rem; color: var(--text-muted); font-style: italic; padding: 6px; border: 1px dashed var(--border-color); border-radius: 4px; text-align: center;">
-                    No custom wins. Tap chips above for instant logs!
-                </li>
-            `;
-        }
-        return customWins.map((win, idx) => `
-            <li class="animate-fade-in" style="background: var(--bg-primary); border: 1px solid var(--border-color); padding: 0.4rem 0.75rem; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; font-size: 0.82rem;">
-                <div style="display: flex; align-items: center; gap: 8px; font-weight: 500;">
-                    <i data-lucide="star" style="width: 12px; height: 12px; fill: var(--color-warning); stroke: var(--color-warning);"></i>
-                    <span>${win}</span>
-                </div>
-                <button class="btn-delete-win" data-index="${idx}" style="background: transparent; border: none; cursor: pointer; color: var(--text-muted);"><i data-lucide="x" style="width: 14px; height: 14px;"></i></button>
-            </li>
-        `).join('');
     },
 
     _setupListeners() {
@@ -1488,96 +1426,43 @@ const Journal = {
             this.loadDateLog();
         });
 
-        const moodOptions = this.container.querySelectorAll('.mood-option');
-        moodOptions.forEach(opt => {
-            opt.addEventListener('click', () => {
-                moodOptions.forEach(o => o.classList.remove('active'));
-                opt.classList.add('active');
-                this.activeMood = parseInt(opt.getAttribute('data-mood'));
-            });
-        });
-
-        const energyInput = this.container.querySelector('#energy-range-input');
-        const energyBadge = this.container.querySelector('#energy-badge');
-        const energyLevels = ["Exhausted", "Tired", "Balanced", "Energetic", "Supercharged!"];
-        
-        energyInput.addEventListener('input', (e) => {
-            const val = parseInt(e.target.value);
-            energyBadge.innerText = energyLevels[val - 1];
-        });
-
-        const winChips = this.container.querySelectorAll('.win-chip');
-        winChips.forEach(chip => {
-            chip.addEventListener('click', () => {
-                const tag = chip.getAttribute('data-tag');
-                const idx = this.wins.indexOf(tag);
-                if (idx !== -1) {
-                    this.wins.splice(idx, 1);
-                    chip.classList.remove('active');
-                } else {
-                    this.wins.push(tag);
-                    chip.classList.add('active');
-                }
-                
-                this.container.querySelector('#wins-list').innerHTML = this._renderWinsList();
-                lucide.createIcons();
-                this._setupWinDeleteListeners();
-            });
-        });
-
-        const winInput = this.container.querySelector('#win-input');
-        const addWinBtn = this.container.querySelector('#btn-add-win');
-
-        const addWin = () => {
-            const val = winInput.value.trim();
-            if (val) {
-                this.wins.push(val);
-                winInput.value = '';
-                this.container.querySelector('#wins-list').innerHTML = this._renderWinsList();
-                lucide.createIcons();
-                this._setupWinDeleteListeners();
-            }
-        };
-
-        addWinBtn.addEventListener('click', addWin);
-        winInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                addWin();
-            }
-        });
-
-        // Prompt helper button injector listeners
-        const textarea = this.container.querySelector('#reflections-textarea');
-        const prompts = {
-            IdentityProof: "\n\n[Identity Proof]: Today I proved I am a self-respecting person by keeping my personal hygiene clean and my room arranged...",
-            FrictionReduce: "\n\n[Friction Reduction]: To make my habits easier tomorrow, I will lay my room reset basket right next to the doorway...",
-            EnvironmentalCue: "\n\n[Obvious Cues]: I set a small declutter basket near my bedroom doorway, which triggered my Room Reset habit immediately...",
-            StrugglesTriumphs: "\n\n[Progress & Struggles]: Today was energetic. Completing my morning hygiene gave me a solid start before leaving for office..."
-        };
-
-        const promptBtns = this.container.querySelectorAll('.btn-prompt');
-        promptBtns.forEach(btn => {
+        const moodButtons = this.container.querySelectorAll('#mood-row .mood-btn');
+        moodButtons.forEach(btn => {
             btn.addEventListener('click', () => {
-                const key = btn.getAttribute('data-prompt');
-                const val = prompts[key];
-                textarea.value = (textarea.value.trim() + val).trim();
-                textarea.focus();
+                moodButtons.forEach(b => b.classList.remove('sel'));
+                btn.classList.add('sel');
+                this.activeMood = parseInt(btn.getAttribute('data-mood'));
             });
         });
 
-        this._setupWinDeleteListeners();
+        const energyButtons = this.container.querySelectorAll('#nrg-row .energy-btn');
+        energyButtons.forEach(btn => {
+            btn.addEventListener('click', () => {
+                energyButtons.forEach(b => b.classList.remove('sel'));
+                btn.classList.add('sel');
+                this.activeEnergy = parseInt(btn.getAttribute('data-energy'));
+            });
+        });
 
         this.container.querySelector('#btn-save-journal').addEventListener('click', () => {
             const isFirstSave = !db.logs[this.selectedDate] || db.logs[this.selectedDate].mood === 0;
             
+            const winsVal = this.container.querySelector('#j-wins').value.trim();
+            const hardVal = this.container.querySelector('#j-hard').value.trim();
+            const anxietyVal = this.container.querySelector('#j-anxiety').value.trim();
+            const tomorrowVal = this.container.querySelector('#j-tomorrow').value.trim();
+            const freeVal = this.container.querySelector('#reflections-textarea').value.trim();
+
             const logData = {
                 mood: this.activeMood,
-                energy: parseInt(energyInput.value),
-                wins: this.wins,
-                highlight: this.container.querySelector('#highlight-input').value,
-                improvement: this.container.querySelector('#improvement-input').value,
-                journalNotes: textarea.value
+                energy: this.activeEnergy || 3,
+                wins: winsVal ? [winsVal] : [],
+                hard: hardVal,
+                anxiety: anxietyVal,
+                tomorrow: tomorrowVal,
+                improvement: tomorrowVal, // compatibility
+                free: freeVal,
+                journalNotes: freeVal // compatibility
             };
 
             db.saveLogForDate(this.selectedDate, logData);
@@ -1591,26 +1476,6 @@ const Journal = {
             
             // Re-render to reflect new summary/compliance states
             this.loadDateLog();
-        });
-    },
-
-    _setupWinDeleteListeners() {
-        const deleteButtons = this.container.querySelectorAll('.btn-delete-win');
-        deleteButtons.forEach(btn => {
-            btn.addEventListener('click', () => {
-                const idx = parseInt(btn.getAttribute('data-index'));
-                const customWins = this.wins.filter(w => !["🎯 Met Habits", "🥗 Ate Clean", "😴 Slept 8 Hrs", "💻 Highly Focused", "🚶 Exercised", "❤️ Contacted Friend"].includes(w));
-                const targetWin = customWins[idx];
-                
-                const primaryIdx = this.wins.indexOf(targetWin);
-                if (primaryIdx !== -1) {
-                    this.wins.splice(primaryIdx, 1);
-                }
-                
-                this.container.querySelector('#wins-list').innerHTML = this._renderWinsList();
-                lucide.createIcons();
-                this._setupWinDeleteListeners();
-            });
         });
     },
 

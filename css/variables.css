@@ -1,83 +1,82 @@
-/* Google-style Minimalist Design System Custom Tokens */
+/* AtomicFlow Sleek Minimalist Space-Dark Design System Custom Tokens */
 :root {
-    /* Fonts - Geometric Heading, highly readable body */
-    --font-heading: 'Outfit', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
-    --font-body: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+    /* Fonts - Hyper-Modern Geometric Heading, warm Epilogue body */
+    --font-heading: 'Syne', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --font-body: 'Epilogue', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 
-    /* Google Light Theme Colors (Default - Simple, Clean, Spacious) */
-    --bg-primary: #f8f9fa;       /* Google page bg */
-    --bg-secondary: #ffffff;     /* Google Keep / Tasks Card bg */
-    --bg-sidebar: #ffffff;       /* Google-style white clean sidebar */
+    /* Premium Space Dark Theme Colors (Default) */
+    --bg-primary: #0d0d0f;       /* Deep space background */
+    --bg-secondary: #141417;     /* Clean dark card panels */
+    --bg-sidebar: #141417;       /* Minimalist dark sidebar */
     
-    --sidebar-text: #202124;     /* Google primary text dark grey */
-    --sidebar-text-muted: #5f6368;/* Google secondary text */
-    --sidebar-active-bg: #e8f0fe;  /* Google active blue fill */
-    --sidebar-active-text: #1a73e8;/* Google blue brand color */
+    --sidebar-text: #f0ede8;     /* Soft warm white primary text */
+    --sidebar-text-muted: #a8a5a0;/* Soft grey secondary text */
+    --sidebar-active-bg: rgba(184, 240, 100, 0.08); /* Transparent neon-lime active highlight */
+    --sidebar-active-text: #b8f064;/* Neon-lime active text */
 
-    --text-primary: #202124;     /* Google primary dark text */
-    --text-secondary: #5f6368;   /* Google secondary text */
-    --text-muted: #80868b;       /* Google tertiary text */
+    --text-primary: #f0ede8;     /* Warm white primary text */
+    --text-secondary: #a8a5a0;   /* Secondary warm grey text */
+    --text-muted: #5a5856;       /* Tertiary dark grey text */
 
-    /* Glassmorphism tokens replaced with clean, flat Google Keep styles */
-    --glass-bg: #ffffff;
-    --glass-border: #dadce0;     /* Google light grey border */
-    --glass-shadow: 0 1px 2px 0 rgba(60,64,67,0.3), 0 1px 3px 1px rgba(60,64,67,0.15); /* Google Keep card shadow */
+    /* Flat Clean Minimalist Keep styles */
+    --glass-bg: #141417;
+    --glass-border: #2a2a30;     /* Crisp thin border */
+    --glass-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
     
-    /* Google Brand Accent Colors */
-    --primary: #1a73e8;          /* Google Blue */
-    --primary-light: #8ab4f8;
-    --primary-dark: #1557b0;
+    /* Neon Lime Brand Accent Colors */
+    --primary: #b8f064;          /* Neon Lime */
+    --primary-light: #d8f8a0;
+    --primary-dark: #8fd43a;
     
-    --grad-primary: linear-gradient(135deg, #1a73e8 0%, #297be6 100%);
-    --grad-success: linear-gradient(135deg, #137333 0%, #1e8e3e 100%);
-    --grad-warning: linear-gradient(135deg, #b06000 0%, #e37400 100%);
-    --grad-danger: linear-gradient(135deg, #c5221f 0%, #d93025 100%);
-    --grad-info: linear-gradient(135deg, #12b5cb 0%, #00acc1 100%);
-    --grad-glow: linear-gradient(135deg, rgba(26, 115, 232, 0.04) 0%, rgba(26, 115, 232, 0.02) 100%);
+    --grad-primary: linear-gradient(135deg, #b8f064 0%, #8fd43a 100%);
+    --grad-success: linear-gradient(135deg, #b8f064 0%, #8fd43a 100%);
+    --grad-warning: linear-gradient(135deg, #f5b942 0%, #d97706 100%);
+    --grad-danger: linear-gradient(135deg, #f06464 0%, #c5221f 100%);
+    --grad-info: linear-gradient(135deg, #64b0f0 0%, #3b82f6 100%);
+    --grad-glow: linear-gradient(135deg, rgba(184, 240, 100, 0.05) 0%, rgba(184, 240, 100, 0.01) 100%);
     
-    --color-success: #1e8e3e;     /* Google Green */
-    --color-warning: #f9ab00;     /* Google Yellow */
-    --color-danger: #d93025;      /* Google Red */
-    --color-info: #185abc;        /* Google Dark Blue */
+    --color-success: #b8f064;     /* Neon Lime Success */
+    --color-warning: #f5b942;     /* Amber Warning */
+    --color-danger: #f06464;      /* Red Alert */
+    --color-info: #64b0f0;        /* Blue Info */
 
     /* Borders and Border Radii */
-    --radius-sm: 4px;
-    --radius-md: 8px;             /* Google standard card radius */
-    --radius-lg: 8px;
-    --radius-xl: 16px;
-    --border-color: #dadce0;      /* Google standard light grey border */
+    --radius-sm: 8px;
+    --radius-md: 12px;            /* Standard capsule card radius */
+    --radius-lg: 16px;            /* Full main card radius */
+    --radius-xl: 20px;
+    --border-color: #2a2a30;      /* Thin dark-space border */
     
-    /* Transitions */
-    --transition-fast: 0.1s ease;
-    --transition-normal: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    /* Transitions & Elastic Springs */
+    --transition-fast: 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-normal: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* Google Dark Theme Override */
-[data-theme="dark"] {
-    --bg-primary: #202124;       /* Google dark mode page bg */
-    --bg-secondary: #2d2e30;     /* Google dark card bg */
-    --bg-sidebar: #202124;
+/* Light Theme Override - Balanced Warm Tone */
+[data-theme="light"] {
+    --bg-primary: #f5f4f0;       /* Warm light paper page bg */
+    --bg-secondary: #ffffff;     /* Flat white card bg */
+    --bg-sidebar: #ffffff;
     
-    --sidebar-text: #e8eaed;
-    --sidebar-text-muted: #9aa0a6;
-    --sidebar-active-bg: rgba(138, 180, 248, 0.12);
-    --sidebar-active-text: #8ab4f8;
+    --sidebar-text: #1c1c1f;
+    --sidebar-text-muted: #6e6d7a;
+    --sidebar-active-bg: rgba(143, 212, 58, 0.12);
+    --sidebar-active-text: #8fd43a;
 
-    --text-primary: #e8eaed;
-    --text-secondary: #9aa0a6;
-    --text-muted: #70757a;
+    --text-primary: #1c1c1f;
+    --text-secondary: #6e6d7a;
+    --text-muted: #a09fae;
 
-    /* Google Keep Dark Card styles */
-    --glass-bg: #2d2e30;
-    --glass-border: #5f6368;
-    --glass-shadow: 0 1px 3px 0 rgba(0,0,0,0.3);
+    --glass-bg: #ffffff;
+    --glass-border: #e4e2d9;
+    --glass-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
 
-    --border-color: #5f6368;
+    --border-color: #e4e2d9;
     
-    --primary: #8ab4f8;          /* Google light blue */
-    --primary-light: #aecbfa;
-    --primary-dark: #1a73e8;
+    --primary: #8fd43a;          /* Slightly deeper lime green for light text legibility */
+    --primary-light: #b8f064;
+    --primary-dark: #6fa620;
 
-    --grad-primary: linear-gradient(135deg, #8ab4f8 0%, #4285f4 100%);
-    --grad-glow: linear-gradient(135deg, rgba(138, 180, 248, 0.08) 0%, rgba(138, 180, 248, 0.04) 100%);
+    --grad-primary: linear-gradient(135deg, #8fd43a 0%, #6fa620 100%);
+    --grad-glow: linear-gradient(135deg, rgba(143, 212, 58, 0.08) 0%, rgba(143, 212, 58, 0.02) 100%);
 }
