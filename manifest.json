@@ -4,8 +4,8 @@
   "description": "Premium local-first habit tracker & reflection journal based on 'Atomic Habits' by James Clear.",
   "start_url": "./index.html",
   "display": "standalone",
-  "background_color": "#090d16",
-  "theme_color": "#090d16",
+  "background_color": "#f8f9fa",
+  "theme_color": "#1a73e8",
   "orientation": "portrait-primary",
   "scope": "./",
   "icons": [

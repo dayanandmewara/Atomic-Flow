@@ -6,8 +6,8 @@
     <title>AtomicFlow — Habit Tracker & Journal</title>
     
     <!-- Meta tags for premium SEO & branding -->
-    <meta name="description" content="AtomicFlow is a premium, glassmorphic habit tracker & daily micro-journal based on 'Atomic Habits' by James Clear, featuring cloud Google Sheets sync.">
-    <meta name="theme-color" content="#090d16">
+    <meta name="description" content="AtomicFlow is a premium, Google-style habit tracker & daily micro-journal based on 'Atomic Habits' by James Clear, featuring cloud Google Sheets sync.">
+    <meta name="theme-color" content="#1a73e8">
     
     <!-- Design System Core Style Sheets -->
     <link rel="stylesheet" href="css/variables.css">
@@ -86,6 +86,21 @@
                     <span>Settings</span>
                 </a>
             </nav>
+
+            <!-- Gamification XP progression -->
+            <div class="xp-container">
+                <div class="xp-header">
+                    <span style="color: var(--sidebar-text-muted);">System Level</span>
+                    <span class="xp-level-badge" id="sidebar-level-badge">Lvl 1</span>
+                </div>
+                <div class="xp-bar-outer">
+                    <div class="xp-bar-inner" id="sidebar-xp-bar" style="width: 0%;"></div>
+                </div>
+                <div class="xp-footer">
+                    <span id="sidebar-xp-text">0 / 100 XP</span>
+                    <span id="sidebar-title-text" style="color: var(--primary-light);">Novice</span>
+                </div>
+            </div>
 
             <!-- Sidebar footer / Quick theme info -->
             <div class="sidebar-footer">

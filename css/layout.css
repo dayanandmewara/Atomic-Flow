@@ -5,12 +5,12 @@
     width: 100%;
 }
 
-/* Sidebar Styling */
+/* Sidebar Styling - Google Workspace Material Design Style */
 .app-sidebar {
-    width: 280px;
+    width: 256px;
     background-color: var(--bg-sidebar);
     color: var(--sidebar-text);
-    padding: 2rem 1.5rem;
+    padding: 1.5rem 0.5rem;
     display: flex;
     flex-direction: column;
     position: fixed;
@@ -18,7 +18,7 @@
     bottom: 0;
     left: 0;
     z-index: 100;
-    border-right: 1px solid rgba(255, 255, 255, 0.05);
+    border-right: 1px solid var(--border-color);
     transition: width var(--transition-normal);
 }
 
@@ -26,45 +26,46 @@
     display: flex;
     align-items: center;
     gap: 0.75rem;
-    margin-bottom: 2.5rem;
+    padding: 0.5rem 1rem;
+    margin-bottom: 1.5rem;
 }
 
 .brand-icon {
-    width: 40px;
-    height: 40px;
+    width: 32px;
+    height: 32px;
     background: var(--grad-primary);
-    border-radius: var(--radius-md);
+    border-radius: 8px;
     display: flex;
     align-items: center;
     justify-content: center;
     color: #ffffff;
-    box-shadow: 0 4px 15px rgba(99, 102, 241, 0.4);
+    box-shadow: 0 1px 3px rgba(26,115,232,0.3);
 }
 
 .brand-name {
     font-family: var(--font-heading);
-    font-size: 1.35rem;
-    font-weight: 700;
-    letter-spacing: -0.5px;
-    color: #ffffff;
+    font-size: 1.25rem;
+    font-weight: 600;
+    letter-spacing: -0.25px;
+    color: var(--text-primary);
 }
 
-/* Sidebar progress card */
+/* Sidebar progress card - Google-style neat flat box */
 .sidebar-progress-card {
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.05);
-    border-radius: var(--radius-lg);
-    padding: 1.25rem;
-    margin-bottom: 2rem;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 0.75rem 1rem;
+    margin: 0 0.5rem 1.5rem 0.5rem;
     display: flex;
     align-items: center;
-    gap: 1rem;
+    gap: 0.75rem;
 }
 
 .progress-ring-container {
     position: relative;
-    width: 56px;
-    height: 56px;
+    width: 44px;
+    height: 44px;
 }
 
 .progress-ring-circle {
@@ -78,46 +79,50 @@
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    font-size: 0.85rem;
+    font-size: 0.75rem;
     font-weight: 700;
     font-family: var(--font-heading);
-    color: #ffffff;
+    color: var(--text-primary);
 }
 
 .progress-info h4 {
-    color: #ffffff;
-    font-size: 0.9rem;
+    color: var(--text-primary);
+    font-size: 0.85rem;
     font-weight: 600;
 }
 
 .progress-info p {
-    color: var(--sidebar-text-muted);
-    font-size: 0.75rem;
-    margin-top: 2px;
+    color: var(--text-secondary);
+    font-size: 0.72rem;
+    margin-top: 1px;
 }
 
-/* Navigation Links */
+/* Navigation Links - Google-style capsule tabs */
 .sidebar-nav {
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
+    gap: 4px;
     flex: 1;
+    padding: 0 0.25rem;
 }
 
 .nav-link {
     display: flex;
     align-items: center;
     gap: 1rem;
-    padding: 0.85rem 1.25rem;
+    padding: 0.65rem 1.25rem;
     color: var(--sidebar-text-muted);
     font-weight: 500;
-    border-radius: var(--radius-md);
+    font-size: 0.92rem;
+    border-radius: 0 24px 24px 0; /* Google capsule list item shape */
     cursor: pointer;
+    margin-right: 0.5rem;
     transition: all var(--transition-fast);
+    border-left: 3px solid transparent;
 }
 
 .nav-link i {
-    font-size: 1.2rem;
+    font-size: 1.15rem;
     width: 20px;
     height: 20px;
     display: flex;
@@ -126,21 +131,21 @@
 }
 
 .nav-link:hover {
-    color: #ffffff;
-    background: rgba(255, 255, 255, 0.02);
+    color: var(--text-primary);
+    background: var(--bg-primary);
 }
 
 .nav-link.active {
-    color: #ffffff;
+    color: var(--sidebar-active-text);
     background: var(--sidebar-active-bg);
+    font-weight: 600;
     border-left: 3px solid var(--primary);
-    box-shadow: inset 5px 0 15px rgba(99, 102, 241, 0.05);
 }
 
-/* Sidebar Footer / Theme Toggle */
+/* Sidebar Footer */
 .sidebar-footer {
-    padding-top: 1.5rem;
-    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    padding: 1rem 0.5rem 0.5rem 0.5rem;
+    border-top: 1px solid var(--border-color);
     display: flex;
     flex-direction: column;
     gap: 1rem;
@@ -149,10 +154,10 @@
 /* Content Container */
 .app-content {
     flex: 1;
-    margin-left: 280px;
-    padding: 2.5rem 3rem;
+    margin-left: 256px;
+    padding: 2rem 2.5rem;
     min-height: 100vh;
-    max-width: calc(100vw - 280px);
+    max-width: calc(100vw - 256px);
     transition: margin-left var(--transition-normal);
 }
 
@@ -161,20 +166,23 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 2.5rem;
+    margin-bottom: 2rem;
     gap: 1.5rem;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 1rem;
 }
 
 .welcome-msg h1 {
-    font-size: 2rem;
-    font-weight: 700;
+    font-size: 1.75rem;
+    font-weight: 500; /* Google-style cleaner mid font weight */
     margin-bottom: 0.25rem;
-    letter-spacing: -0.5px;
+    letter-spacing: -0.25px;
+    color: var(--text-primary);
 }
 
 .welcome-msg p {
     color: var(--text-secondary);
-    font-size: 0.95rem;
+    font-size: 0.9rem;
 }
 
 .header-actions {
@@ -184,14 +192,13 @@
 }
 
 .date-indicator {
-    background: var(--glass-bg);
+    background: var(--bg-secondary);
     border: 1px solid var(--border-color);
-    box-shadow: var(--glass-shadow);
-    backdrop-filter: blur(16px);
-    padding: 0.65rem 1.25rem;
-    border-radius: var(--radius-md);
-    font-weight: 600;
-    font-size: 0.9rem;
+    padding: 0.5rem 1rem;
+    border-radius: 20px; /* Google round badge */
+    font-weight: 500;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
     display: flex;
     align-items: center;
     gap: 0.5rem;
@@ -199,59 +206,68 @@
 
 /* Quick Warning Banner */
 .warning-banner {
-    background: var(--grad-danger);
-    color: #ffffff;
-    padding: 0.75rem 1.5rem;
+    background: #fdf2f2;
+    border: 1px solid #fbd5d5;
+    color: #9b1c1c;
+    padding: 0.75rem 1.25rem;
     border-radius: var(--radius-md);
-    margin-bottom: 2rem;
+    margin-bottom: 1.5rem;
     display: flex;
     align-items: center;
     gap: 0.75rem;
+    font-size: 0.88rem;
     font-weight: 500;
-    box-shadow: 0 4px 15px rgba(239, 68, 68, 0.2);
     animation: fadeIn 0.4s ease;
 }
 
-.warning-banner i {
-    animation: pulse 1.5s infinite;
+[data-theme="dark"] .warning-banner {
+    background: rgba(240, 82, 82, 0.1);
+    border-color: rgba(240, 82, 82, 0.2);
+    color: #f8b4b4;
 }
 
 /* Main layouts for different views */
 .view-grid {
     display: grid;
     grid-template-columns: repeat(12, 1fr);
-    gap: 2rem;
+    gap: 1.5rem;
 }
 
 /* Responsive Breakpoints */
 @media (max-width: 1024px) {
     .app-sidebar {
-        width: 80px;
-        padding: 1.5rem 0.75rem;
+        width: 72px;
+        padding: 1.5rem 0.25rem;
         align-items: center;
     }
 
     .brand-name, 
     .sidebar-progress-card, 
     .nav-link span,
-    .sidebar-footer .theme-label {
+    .sidebar-footer .theme-label,
+    .xp-container {
         display: none;
     }
 
     .brand-section {
-        margin-bottom: 2rem;
+        margin-bottom: 1.5rem;
         justify-content: center;
+        padding: 0;
     }
 
     .nav-link {
         justify-content: center;
-        padding: 0.85rem;
+        padding: 0.65rem;
+        border-radius: 50%; /* Make round buttons when collapsed */
+        width: 48px;
+        height: 48px;
+        margin-right: 0;
     }
 
     .app-content {
-        margin-left: 80px;
-        max-width: calc(100vw - 80px);
-        padding: 2rem;
+        margin-left: 72px;
+        max-width: calc(100vw - 72px);
+        padding: 1.5rem;
     }
 }
 
@@ -270,15 +286,16 @@
         right: 0;
         flex-direction: row;
         justify-content: space-around;
-        padding: 0.5rem 1rem;
+        padding: 0.25rem 0.5rem;
         border-right: none;
-        border-top: 1px solid rgba(255, 255, 255, 0.05);
-        box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.25);
+        border-top: 1px solid var(--border-color);
+        box-shadow: 0 -2px 10px rgba(0,0,0,0.05);
     }
 
     .brand-section,
     .sidebar-footer,
-    .sidebar-progress-card {
+    .sidebar-progress-card,
+    .xp-container {
         display: none;
     }
 
@@ -287,38 +304,41 @@
         width: 100%;
         justify-content: space-around;
         gap: 0;
+        padding: 0;
     }
 
     .nav-link {
         flex-direction: column;
-        gap: 4px;
-        padding: 0.5rem;
-        font-size: 0.75rem;
+        gap: 2px;
+        padding: 0.4rem;
+        font-size: 0.72rem;
         color: var(--sidebar-text-muted);
+        border-radius: 8px;
+        margin-right: 0;
+        border-left: none;
     }
 
     .nav-link.active {
         border-left: none;
-        border-bottom: 3px solid var(--primary);
-        background: transparent;
-        box-shadow: none;
+        background: var(--sidebar-active-bg);
+        color: var(--sidebar-active-text);
     }
 
     .app-content {
         margin-left: 0;
-        padding: 1.5rem 1rem 5.5rem 1rem;
+        padding: 1.25rem 1rem 5rem 1rem;
         max-width: 100%;
     }
 
     .content-header {
         flex-direction: column;
         align-items: flex-start;
-        gap: 1rem;
-        margin-bottom: 1.5rem;
+        gap: 0.75rem;
+        margin-bottom: 1.25rem;
     }
 
     .welcome-msg h1 {
-        font-size: 1.6rem;
+        font-size: 1.5rem;
     }
 
     .header-actions {
@@ -328,6 +348,6 @@
 
     .view-grid {
         grid-template-columns: 1fr;
-        gap: 1.5rem;
+        gap: 1.25rem;
     }
 }

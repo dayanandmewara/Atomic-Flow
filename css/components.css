@@ -121,18 +121,18 @@ textarea.form-control {
     min-height: 100px;
 }
 
-/* Habit Card (Interactive Dashboard List Item) */
+/* Habit Card (Interactive Dashboard List Item) - Upgraded V2 Styles */
 .habit-card {
     display: flex;
     align-items: center;
     gap: 1.25rem;
-    padding: 1.25rem;
+    padding: 1.35rem 1.5rem;
     border-radius: var(--radius-lg);
     background: var(--glass-bg);
     border: 1px solid var(--glass-border);
     box-shadow: var(--glass-shadow);
     backdrop-filter: blur(16px);
-    margin-bottom: 1rem;
+    margin-bottom: 1.25rem;
     position: relative;
     overflow: hidden;
     transition: all var(--transition-normal);
@@ -144,15 +144,15 @@ textarea.form-control {
     left: 0;
     top: 0;
     bottom: 0;
-    width: 4px;
+    width: 6px;
     background: var(--grad-primary);
-    border-radius: 4px 0 0 4px;
-    opacity: 0.7;
+    border-radius: 6px 0 0 6px;
+    opacity: 0.8;
 }
 
 .habit-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 24px rgba(31, 38, 135, 0.06);
+    transform: translateY(-3px);
+    box-shadow: 0 10px 30px rgba(31, 38, 135, 0.08);
 }
 
 .habit-card.completed {
@@ -164,11 +164,11 @@ textarea.form-control {
     background: var(--grad-success);
 }
 
-/* Custom Satisfying Checkbox */
+/* Custom Satisfying Checkbox - Larger V2 Target */
 .checkbox-wrapper {
     position: relative;
-    width: 32px;
-    height: 32px;
+    width: 36px;
+    height: 36px;
     flex-shrink: 0;
 }
 
@@ -184,8 +184,8 @@ textarea.form-control {
     position: absolute;
     top: 0;
     left: 0;
-    height: 32px;
-    width: 32px;
+    height: 36px;
+    width: 36px;
     background-color: var(--bg-primary);
     border: 2px solid var(--border-color);
     border-radius: 50%;
@@ -199,19 +199,19 @@ textarea.form-control {
 
 .checkbox-wrapper:hover .checkmark {
     border-color: var(--primary);
-    transform: scale(1.05);
+    transform: scale(1.08);
 }
 
 .checkbox-wrapper input:checked ~ .checkmark {
     background: var(--grad-success);
     border-color: transparent;
     color: #ffffff;
-    transform: scale(1.1);
-    box-shadow: 0 4px 10px rgba(16, 185, 129, 0.3);
+    transform: scale(1.12);
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.35);
 }
 
 .checkmark i {
-    font-size: 1.1rem;
+    font-size: 1.2rem;
     transition: transform 0.25s ease;
 }
 
@@ -226,9 +226,9 @@ textarea.form-control {
 }
 
 .habit-name {
-    font-size: 1.05rem;
+    font-size: 1.1rem;
     font-weight: 600;
-    margin-bottom: 2px;
+    margin-bottom: 3px;
     transition: color var(--transition-fast);
 }
 
@@ -249,7 +249,7 @@ textarea.form-control {
     text-transform: uppercase;
     font-weight: 700;
     letter-spacing: 0.5px;
-    padding: 2px 8px;
+    padding: 2px 10px;
     border-radius: 20px;
     color: #ffffff;
 }
@@ -266,6 +266,10 @@ textarea.form-control {
     display: flex;
     align-items: center;
     gap: 4px;
+    background: var(--bg-primary);
+    padding: 2px 8px;
+    border-radius: 4px;
+    border: 1px solid var(--border-color);
 }
 
 /* Streak Indicator */
@@ -290,7 +294,33 @@ textarea.form-control {
 }
 
 .habit-card:hover .streak-badge {
-    transform: scale(1.05) rotate(2deg);
+    transform: scale(1.08) rotate(2deg);
+}
+
+/* V2 Low Energy 2-Minute button on Card */
+.btn-twomin-trigger {
+    background: rgba(99, 102, 241, 0.08);
+    color: var(--primary);
+    border: 1px dashed rgba(99, 102, 241, 0.3);
+    border-radius: 20px;
+    padding: 4px 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.btn-twomin-trigger:hover {
+    background: var(--grad-primary);
+    color: #ffffff;
+    border-color: transparent;
+    transform: scale(1.03);
+}
+
+.btn-twomin-trigger.active {
+    background: var(--grad-primary);
+    color: #ffffff;
+    border-color: transparent;
 }
 
 /* 2-Minute Rule Switch Component */
@@ -668,7 +698,137 @@ textarea.form-control {
 }
 
 .heatmap-cell.level-0 { background-color: var(--bg-primary); border: 1px solid var(--border-color); }
-.heatmap-cell.level-1 { background-color: #d8b4fe; } /* Light purple */
-.heatmap-cell.level-2 { background-color: #c084fc; } /* Med purple */
-.heatmap-cell.level-3 { background-color: #a855f7; } /* Purple */
-.heatmap-cell.level-4 { background-color: #6366f1; } /* Indigo */
+.heatmap-cell.level-1 { background-color: #d8b4fe; } 
+.heatmap-cell.level-2 { background-color: #c084fc; } 
+.heatmap-cell.level-3 { background-color: #a855f7; } 
+.heatmap-cell.level-4 { background-color: #6366f1; } 
+
+/* V2 Preset Cards UI */
+.presets-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    gap: 0.75rem;
+    margin-bottom: 1.5rem;
+}
+
+.preset-card {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 0.75rem;
+    text-align: center;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+
+.preset-card:hover {
+    transform: translateY(-2px);
+    border-color: var(--primary);
+    background: rgba(99, 102, 241, 0.05);
+}
+
+.preset-emoji {
+    font-size: 1.5rem;
+}
+
+.preset-title {
+    font-size: 0.78rem;
+    font-weight: 700;
+}
+
+.preset-cat-label {
+    font-size: 0.65rem;
+    font-weight: 600;
+    color: var(--text-muted);
+}
+
+/* V2 Quick journaling Win Chips */
+.win-chips-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 1.25rem;
+}
+
+.win-chip {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.win-chip:hover {
+    border-color: var(--primary);
+    background: rgba(99, 102, 241, 0.05);
+    transform: translateY(-1px);
+}
+
+.win-chip.active {
+    background: var(--grad-primary);
+    color: #ffffff;
+    border-color: transparent;
+}
+
+/* V2 Gamification XP Progression Bar (Sidebar) */
+.xp-container {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: var(--radius-lg);
+    padding: 1rem;
+    margin-top: auto;
+    margin-bottom: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.xp-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.75rem;
+    font-weight: 700;
+}
+
+.xp-level-badge {
+    color: #ffffff;
+    font-weight: 800;
+    background: var(--grad-primary);
+    padding: 1px 6px;
+    border-radius: 4px;
+}
+
+.xp-bar-outer {
+    width: 100%;
+    height: 8px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.xp-bar-inner {
+    height: 100%;
+    background: var(--grad-primary);
+    width: 0%;
+    transition: width 0.4s ease;
+}
+
+.xp-footer {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.7rem;
+    color: var(--sidebar-text-muted);
+    font-weight: 600;
+}
