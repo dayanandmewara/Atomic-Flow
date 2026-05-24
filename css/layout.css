@@ -246,7 +246,7 @@
     .nav-link span,
     .sidebar-footer .theme-label,
     .xp-container {
-        display: none;
+        display: none !important;
     }
 
     .brand-section {
@@ -296,7 +296,7 @@
     .sidebar-footer,
     .sidebar-progress-card,
     .xp-container {
-        display: none;
+        display: none !important;
     }
 
     .sidebar-nav {
