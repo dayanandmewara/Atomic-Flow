@@ -299,6 +299,7 @@ class DatabaseManager {
             habits: this.habits,
             logs: this.logs,
             blueprints: this.blueprints,
+            tasks: this.tasks,
             timestamp: Date.now()
         };
 
@@ -337,6 +338,10 @@ class DatabaseManager {
             if (data.blueprints) {
                 this.blueprints = data.blueprints;
                 this._save('blueprints', this.blueprints);
+            }
+            if (data.tasks) {
+                this.tasks = data.tasks;
+                this._save('tasks', this.tasks);
             }
             return true;
         } catch (e) {
