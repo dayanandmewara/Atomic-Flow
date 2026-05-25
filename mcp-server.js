@@ -401,37 +401,73 @@ if (isSseMode) {
   const app = express();
   const PORT = process.env.PORT || 3000;
   
-  // Custom API key authentication check middleware
-  const authMiddleware = (req, res, next) => {
-    if (MCP_AUTH_KEY) {
-      const authHeader = req.headers.authorization;
-      const expectedAuth = `Bearer ${MCP_AUTH_KEY}`;
-      if (authHeader !== expectedAuth) {
-        return res.status(401).json({ error: "Unauthorized: Invalid or missing Authorization key header." });
-      }
+  // 1. Enable CORS Middleware for Browser-based Claude.ai Connectors
+  app.use((req, res, next) => {
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, x-mcp-auth-key");
+    if (req.method === "OPTIONS") {
+      return res.sendStatus(204);
     }
     next();
-  };
+  });
 
-  let sseTransport = null;
+  // Track active stateful transport sessions in memory
+  const activeTransports = new Map();
 
-  app.get("/sse", authMiddleware, (req, res) => {
-    sseTransport = new SSEServerTransport("/messages", res);
-    server.connect(sseTransport).catch(err => {
-      console.error("SSE Connection error:", err);
+  // 2. GET Endpoint: Establish SSE Stream
+  app.get("/sse", (req, res) => {
+    // Verify Security Token
+    if (MCP_AUTH_KEY) {
+      const authHeader = req.headers.authorization;
+      const authQuery = req.query.auth_key;
+      const expectedAuth = `Bearer ${MCP_AUTH_KEY}`;
+      
+      if (authHeader !== expectedAuth && authQuery !== MCP_AUTH_KEY) {
+        return res.status(401).json({ error: "Unauthorized: Invalid or missing authentication key." });
+      }
+    }
+
+    const transport = new SSEServerTransport("/messages", res);
+    const sessionId = transport.sessionId;
+    activeTransports.set(sessionId, transport);
+
+    server.connect(transport).catch(err => {
+      console.error(`SSE Connection error on session ${sessionId}:`, err);
+      activeTransports.delete(sessionId);
+    });
+
+    req.on("close", () => {
+      activeTransports.delete(sessionId);
     });
   });
 
-  app.post("/messages", authMiddleware, express.json(), async (req, res) => {
-    if (sseTransport) {
-      await sseTransport.handlePostMessage(req, res);
+  // 3. POST Endpoint: Handle Tool Call Messages
+  app.post("/messages", express.json(), async (req, res) => {
+    const connectionId = req.query.connection_id;
+
+    // Validate that the request session was authenticated during the SSE GET handshake
+    if (MCP_AUTH_KEY) {
+      if (!connectionId || !activeTransports.has(connectionId)) {
+        // Fallback to header verification if connection_id is missing/unregistered
+        const authHeader = req.headers.authorization;
+        const expectedAuth = `Bearer ${MCP_AUTH_KEY}`;
+        if (authHeader !== expectedAuth) {
+          return res.status(401).json({ error: "Unauthorized: Invalid or missing connection session." });
+        }
+      }
+    }
+
+    const transport = activeTransports.get(connectionId);
+    if (transport) {
+      await transport.handlePostMessage(req, res);
     } else {
-      res.status(400).json({ error: "Active SSE connection not established." });
+      res.status(400).json({ error: "Active SSE connection not found." });
     }
   });
 
   app.listen(PORT, () => {
-    console.log(`[AtomicFlow Custom MCP Server] Running in SSE mode on port ${PORT}`);
+    console.log(`[AtomicFlow Custom MCP Server] Running stateful SSE mode on port ${PORT}`);
     console.log(`[Google Sync Settings] Sheets endpoint active: ${SHEETS_URL ? "Configured" : "NOT CONFIGURED"}`);
     if (MCP_AUTH_KEY) {
       console.log(`[Security] Auth Key security verification: ENABLED`);
