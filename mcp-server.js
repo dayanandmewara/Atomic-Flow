@@ -428,7 +428,9 @@ if (isSseMode) {
       }
     }
 
-    const transport = new SSEServerTransport("/messages", res);
+    // Construct a fully qualified absolute endpoint URL with propagated auth keys for absolute client compatibility
+    const absoluteEndpoint = `${req.protocol}://${req.get("host")}/messages${MCP_AUTH_KEY ? `?auth_key=${MCP_AUTH_KEY}` : ""}`;
+    const transport = new SSEServerTransport(absoluteEndpoint, res);
     const sessionId = transport.sessionId;
     activeTransports.set(sessionId, transport);
 
