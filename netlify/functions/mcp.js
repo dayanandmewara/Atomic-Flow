@@ -450,7 +450,10 @@ export default async (request, context) => {
   // Verify MCP Security Token if configured
   if (MCP_AUTH_KEY) {
     const authHeader = request.headers.get("authorization");
-    if (authHeader !== `Bearer ${MCP_AUTH_KEY}`) {
+    const authQuery = url.searchParams.get("auth_key");
+    const expectedAuth = `Bearer ${MCP_AUTH_KEY}`;
+    
+    if (authHeader !== expectedAuth && authQuery !== MCP_AUTH_KEY) {
       return new Response(JSON.stringify({ error: "Unauthorized: Invalid or missing authentication key." }), {
         status: 401,
         headers: { "Content-Type": "application/json" }
