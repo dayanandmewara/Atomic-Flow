@@ -464,7 +464,11 @@ export default async (request, context) => {
   // --- GET REQUEST: ESTABLISH SSE TRANSPORT STREAM ---
   if (method === "GET") {
     const connectionId = "conn_" + Date.now() + Math.random().toString(36).substring(2, 7);
-    const clientEndpoint = `${url.origin}${url.pathname}?connection_id=${connectionId}`;
+    
+    // Propagate all query parameters (like auth_key) to the client endpoint
+    const clientParams = new URLSearchParams(url.search);
+    clientParams.set("connection_id", connectionId);
+    const clientEndpoint = `${url.origin}${url.pathname}?${clientParams.toString()}`;
 
     const stream = new ReadableStream({
       async start(controller) {
