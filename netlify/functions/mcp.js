@@ -447,6 +447,24 @@ export default async (request, context) => {
   const url = new URL(request.url);
   const method = request.method;
 
+  // Base CORS headers for all responses
+  const corsHeaders = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization, x-mcp-auth-key"
+  };
+
+  // --- HANDLE CORS PREFLIGHT OPTIONS REQUESTS ---
+  if (method === "OPTIONS") {
+    return new Response(null, {
+      status: 204,
+      headers: {
+        ...corsHeaders,
+        "Access-Control-Max-Age": "86400"
+      }
+    });
+  }
+
   // Verify MCP Security Token if configured
   if (MCP_AUTH_KEY) {
     const authHeader = request.headers.get("authorization");
@@ -456,7 +474,10 @@ export default async (request, context) => {
     if (authHeader !== expectedAuth && authQuery !== MCP_AUTH_KEY) {
       return new Response(JSON.stringify({ error: "Unauthorized: Invalid or missing authentication key." }), {
         status: 401,
-        headers: { "Content-Type": "application/json" }
+        headers: { 
+          "Content-Type": "application/json",
+          ...corsHeaders
+        }
       });
     }
   }
@@ -510,7 +531,8 @@ export default async (request, context) => {
       headers: {
         "Content-Type": "text/event-stream",
         "Cache-Control": "no-cache",
-        "Connection": "keep-alive"
+        "Connection": "keep-alive",
+        ...corsHeaders
       }
     });
   }
@@ -521,7 +543,10 @@ export default async (request, context) => {
     if (!connectionId) {
       return new Response(JSON.stringify({ error: "Missing connection_id query parameter." }), {
         status: 400,
-        headers: { "Content-Type": "application/json" }
+        headers: { 
+          "Content-Type": "application/json",
+          ...corsHeaders
+        }
       });
     }
 
@@ -534,17 +559,26 @@ export default async (request, context) => {
       // Write response into Upstash Redis queue for the GET connection stream to read
       await redisPush(connectionId, JSON.stringify(responseBody));
 
-      return new Response(null, { status: 200 });
+      return new Response(null, { 
+        status: 200,
+        headers: corsHeaders
+      });
     } catch (err) {
       return new Response(JSON.stringify({ error: `POST execution failed: ${err.message}` }), {
         status: 500,
-        headers: { "Content-Type": "application/json" }
+        headers: { 
+          "Content-Type": "application/json",
+          ...corsHeaders
+        }
       });
     }
   }
 
   return new Response(JSON.stringify({ error: "Method not allowed." }), {
     status: 405,
-    headers: { "Content-Type": "application/json" }
+    headers: { 
+      "Content-Type": "application/json",
+      ...corsHeaders
+    }
   });
 };
