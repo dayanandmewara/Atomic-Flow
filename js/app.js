@@ -3129,12 +3129,28 @@ class AppShell {
         };
     }
 
-    init() {
+    async init() {
         window.globalAppInstance = this;
         this.applyTheme();
         this.bindGlobalListeners();
         this.renderGlobalUI();
         this.route();
+
+        // Background auto-pull from Google Sheets on start to prevent overwriting Claude's changes
+        const settings = db.getSettings();
+        if (settings.sheetsUrl && settings.autoSync) {
+            try {
+                console.log("[AtomicFlow Sync] Running background cloud pull to sync with Claude...");
+                const ok = await db.pullFromGoogleSheets();
+                if (ok) {
+                    console.log("[AtomicFlow Sync] Background pull successful! Re-rendering with fresh cloud data...");
+                    this.renderGlobalUI();
+                    this.route();
+                }
+            } catch (e) {
+                console.error("[AtomicFlow Sync] Background startup pull failed:", e);
+            }
+        }
     }
 
     applyTheme() {

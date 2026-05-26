@@ -1,5 +1,5 @@
 /**
- * AtomicFlow Google Apps Script Database Sync Wrapper
+ * AtomicFlow Google Apps Script Database Sync Wrapper - V4 Multi-Tab Upgrade
  * 
  * Paste this script into your Google Sheets Apps Script Editor:
  * 1. Open your Google Sheet.
@@ -15,9 +15,9 @@
 
 function doGet(e) {
   var action = e.parameter.action;
-  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var dbSheet = ss.getSheetByName("Database") || ss.getSheets()[0];
   
-  // Set JSON response headers
   var output = ContentService.createTextOutput();
   output.setMimeType(ContentService.MimeType.JSON);
   
@@ -27,7 +27,7 @@ function doGet(e) {
   }
   
   if (action === 'pull') {
-    var rawData = sheet.getRange(1, 1).getValue();
+    var rawData = dbSheet.getRange(1, 1).getValue();
     var data = {};
     try {
       if (rawData) {
@@ -53,7 +53,7 @@ function doGet(e) {
 }
 
 function doPost(e) {
-  var sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
   var output = ContentService.createTextOutput();
   output.setMimeType(ContentService.MimeType.JSON);
   
@@ -69,8 +69,114 @@ function doPost(e) {
         updatedAt: Date.now()
       };
       
-      // Save entire JSON string into cell A1 for maximum speed and simplicity
-      sheet.getRange(1, 1).setValue(JSON.stringify(dataToSave));
+      // 1. Save entire JSON string into cell A1 of the "Database" sheet for fast app/Claude sync
+      var dbSheet = ss.getSheetByName("Database");
+      if (!dbSheet) {
+        dbSheet = ss.insertSheet("Database");
+      }
+      dbSheet.getRange(1, 1).setValue(JSON.stringify(dataToSave));
+      
+      // 2. Write Habits Sheet in human-readable rows
+      var habitsSheet = ss.getSheetByName("Habits");
+      if (!habitsSheet) {
+        habitsSheet = ss.insertSheet("Habits");
+      }
+      habitsSheet.clear();
+      var habitsHeader = ["ID", "Name", "Category", "Time of Day", "Identity", "Cue", "Reward", "Two-Minute Version", "Stack Trigger", "Active", "Updated At"];
+      habitsSheet.appendRow(habitsHeader);
+      habitsSheet.getRange(1, 1, 1, habitsHeader.length).setFontWeight("bold").setBackground("#e8f0fe");
+      
+      var habits = dataToSave.habits;
+      if (habits && habits.length > 0) {
+        var habitsData = [];
+        for (var i = 0; i < habits.length; i++) {
+          var h = habits[i];
+          habitsData.push([
+            h.id || "",
+            h.name || "",
+            h.category || "",
+            h.timeOfDay || "",
+            h.identity || "",
+            h.cue || "",
+            h.reward || "",
+            h.twoMinuteVersion || "",
+            h.stackTrigger || "",
+            h.active !== false ? "Yes" : "No",
+            h.updatedAt ? new Date(h.updatedAt).toLocaleString() : ""
+          ]);
+        }
+        habitsSheet.getRange(2, 1, habitsData.length, habitsHeader.length).setValues(habitsData);
+      }
+      
+      // 3. Write Tasks Sheet in human-readable rows
+      var tasksSheet = ss.getSheetByName("Tasks");
+      if (!tasksSheet) {
+        tasksSheet = ss.insertSheet("Tasks");
+      }
+      tasksSheet.clear();
+      var tasksHeader = ["ID", "Text", "Completed", "Active", "Date", "Created At", "Updated At"];
+      tasksSheet.appendRow(tasksHeader);
+      tasksSheet.getRange(1, 1, 1, tasksHeader.length).setFontWeight("bold").setBackground("#e8f0fe");
+      
+      var tasks = dataToSave.tasks;
+      if (tasks && tasks.length > 0) {
+        var tasksData = [];
+        for (var j = 0; j < tasks.length; j++) {
+          var t = tasks[j];
+          tasksData.push([
+            t.id || "",
+            t.text || "",
+            t.completed ? "Yes" : "No",
+            t.active !== false ? "Yes" : "No",
+            t.date || "",
+            t.createdAt ? new Date(t.createdAt).toLocaleString() : "",
+            t.updatedAt ? new Date(t.updatedAt).toLocaleString() : ""
+          ]);
+        }
+        tasksSheet.getRange(2, 1, tasksData.length, tasksHeader.length).setValues(tasksData);
+      }
+      
+      // 4. Write Journal Logs Sheet in human-readable rows
+      var journalSheet = ss.getSheetByName("Journal Logs");
+      if (!journalSheet) {
+        journalSheet = ss.insertSheet("Journal Logs");
+      }
+      journalSheet.clear();
+      var journalHeader = ["Date", "Mood", "Energy", "Bedtime", "Wakeup", "Sleep Quality", "Wins", "1% Improvement Target", "Journal Notes", "Updated At"];
+      journalSheet.appendRow(journalHeader);
+      journalSheet.getRange(1, 1, 1, journalHeader.length).setFontWeight("bold").setBackground("#e8f0fe");
+      
+      var logs = dataToSave.logs;
+      var logDates = Object.keys(logs).sort().reverse();
+      if (logDates && logDates.length > 0) {
+        var journalData = [];
+        for (var k = 0; k < logDates.length; k++) {
+          var date = logDates[k];
+          var entry = logs[date];
+          journalData.push([
+            date,
+            entry.mood || "",
+            entry.energy || "",
+            entry.sleepBedtime || "",
+            entry.sleepWakeup || "",
+            entry.sleepQuality || "",
+            entry.wins ? entry.wins.join(", ") : "",
+            entry.improvement || "",
+            entry.journalNotes || "",
+            entry.updatedAt ? new Date(entry.updatedAt).toLocaleString() : ""
+          ]);
+        }
+        journalSheet.getRange(2, 1, journalData.length, journalHeader.length).setValues(journalData);
+      }
+
+      // Auto-resize columns for clean reading
+      try {
+        if (habits && habits.length > 0) habitsSheet.autoResizeColumns(1, habitsHeader.length);
+        if (tasks && tasks.length > 0) tasksSheet.autoResizeColumns(1, tasksHeader.length);
+        if (logDates && logDates.length > 0) journalSheet.autoResizeColumns(1, journalHeader.length);
+      } catch (errResize) {
+        // Ignore resize errors if any
+      }
       
       output.setContent(JSON.stringify({ status: 'success', timestamp: Date.now() }));
       return output;
