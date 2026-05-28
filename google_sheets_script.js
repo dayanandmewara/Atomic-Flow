@@ -1,5 +1,5 @@
 /**
- * AtomicFlow Google Apps Script Database Sync Wrapper - V4 Multi-Tab Upgrade
+ * AtomicFlow Google Apps Script Database Sync Wrapper - V5 Ultra-Robust Upgrade
  * 
  * Paste this script into your Google Sheets Apps Script Editor:
  * 1. Open your Google Sheet.
@@ -14,50 +14,76 @@
  */
 
 function doGet(e) {
-  var action = e.parameter.action;
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var dbSheet = ss.getSheetByName("Database") || ss.getSheets()[0];
-  
-  var output = ContentService.createTextOutput();
-  output.setMimeType(ContentService.MimeType.JSON);
-  
-  if (action === 'test') {
-    output.setContent(JSON.stringify({ status: 'ok', message: 'AtomicFlow Apps Script Connected Successfully!' }));
-    return output;
-  }
-  
-  if (action === 'pull') {
-    var rawData = dbSheet.getRange(1, 1).getValue();
-    var data = {};
-    try {
-      if (rawData) {
-        data = JSON.parse(rawData);
-      } else {
-        throw new Error("Empty cell");
-      }
-    } catch(err) {
-      // Return default database schema if empty/corrupted
-      data = {
-        habits: [],
-        logs: {},
-        blueprints: { identities: [], stacks: [] },
-        tasks: []
-      };
-    }
-    output.setContent(JSON.stringify(data));
-    return output;
-  }
-  
-  output.setContent(JSON.stringify({ error: 'Invalid action parameter. Must be "test" or "pull".' }));
-  return output;
-}
-
-function doPost(e) {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
   var output = ContentService.createTextOutput();
   output.setMimeType(ContentService.MimeType.JSON);
   
   try {
+    var action = e.parameter.action;
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    if (!ss) {
+      throw new Error("Could not access active spreadsheet. Make sure this script is bound to your Google Sheet (Extensions -> Apps Script).");
+    }
+    
+    // Incredibly robust sheet retrieval to prevent null errors
+    var dbSheet = ss.getSheetByName("Database");
+    if (!dbSheet) {
+      var sheets = ss.getSheets();
+      if (sheets.length > 0) {
+        dbSheet = sheets[0];
+      } else {
+        dbSheet = ss.insertSheet("Database");
+      }
+    }
+    
+    if (action === 'test') {
+      output.setContent(JSON.stringify({ status: 'ok', message: 'AtomicFlow Apps Script Connected Successfully!' }));
+      return output;
+    }
+    
+    if (action === 'pull') {
+      var rawData = dbSheet.getRange(1, 1).getValue();
+      var data = {};
+      try {
+        if (rawData) {
+          data = JSON.parse(rawData);
+        } else {
+          throw new Error("Empty cell");
+        }
+      } catch(err) {
+        // Return default database schema if empty/corrupted/not JSON
+        data = {
+          habits: [],
+          logs: {},
+          blueprints: { identities: [], stacks: [] },
+          tasks: []
+        };
+      }
+      output.setContent(JSON.stringify(data));
+      return output;
+    }
+    
+    output.setContent(JSON.stringify({ error: 'Invalid action parameter. Must be "test" or "pull".' }));
+    return output;
+  } catch (globalErr) {
+    output.setContent(JSON.stringify({ 
+      error: 'Runtime Error in doGet: ' + globalErr.toString(),
+      stack: globalErr.stack,
+      status: 'error'
+    }));
+    return output;
+  }
+}
+
+function doPost(e) {
+  var output = ContentService.createTextOutput();
+  output.setMimeType(ContentService.MimeType.JSON);
+  
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    if (!ss) {
+      throw new Error("Could not access active spreadsheet.");
+    }
+    
     var postData = JSON.parse(e.postData.contents);
     
     if (postData.action === 'push') {
@@ -185,7 +211,11 @@ function doPost(e) {
     output.setContent(JSON.stringify({ error: 'Invalid or missing action in POST payload.' }));
     return output;
   } catch (err) {
-    output.setContent(JSON.stringify({ error: 'Server error processing payload: ' + err.toString() }));
+    output.setContent(JSON.stringify({ 
+      error: 'Runtime Error in doPost: ' + err.toString(),
+      stack: err.stack,
+      status: 'error'
+    }));
     return output;
   }
 }
