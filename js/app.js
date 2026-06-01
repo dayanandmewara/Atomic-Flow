@@ -570,7 +570,7 @@ const Dashboard = {
         const blueprints = db.getBlueprints();
         const log = db.getLogForDate(this.selectedDate);
         
-        // V4: Category + Time of Day dual-filter system
+        // V4: Category + 3 Routines (Morning, Evening, Night) dual-filter system
         const filteredHabits = habits.filter(h => {
             const matchesCategory = this.activeFilter === 'all' || h.category === this.activeFilter;
             const matchesTime = this.activeTimeFilter === 'all' || h.timeOfDay === this.activeTimeFilter;
@@ -595,20 +595,20 @@ const Dashboard = {
         const anxietyText = log.anxiety || '';
         const freeText = log.journalNotes || log.free || '';
 
-        // Render clean decluttered Google-style dashboard layout
+        // Render clean, decluttered layout (Consistent Card Sizes & Fully Mobile Responsive via column classes)
         this.container.innerHTML = `
             <div class="animate-fade-in" style="width: 100%;">
                 ${warningBannerHtml}
                 
                 <div class="view-grid">
                     <!-- Left: Identity-Grouped Checklist -->
-                    <div style="grid-column: span 8; display: flex; flex-direction: column; gap: 1.5rem;">
+                    <div class="column-main" style="display: flex; flex-direction: column; gap: 1.5rem; width: 100%; box-sizing: border-box;">
                         
-                        <!-- Date & Category filter panel -->
-                        <div class="glass-card" style="padding: 0.75rem 1.25rem; border-radius: var(--radius-md);">
+                        <!-- Date & Category filter panel (Matching details & flat pill buttons) -->
+                        <div class="glass-card" style="padding: 0.75rem 1.25rem; border-radius: var(--radius-md); width: 100%; box-sizing: border-box;">
                             <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem;">
-                                <div style="display: flex; gap: 0.25rem;">
-                                    <button class="btn btn-secondary filter-tab ${this.activeFilter === 'all' ? 'active-filter' : ''}" data-filter="all" style="padding: 0.35rem 0.85rem; font-size: 0.8rem; border-radius: 16px; border: none; font-weight: 500;">All</button>
+                                <div style="display: flex; gap: 0.25rem; flex-wrap: wrap;">
+                                    <button class="btn btn-secondary filter-tab ${this.activeFilter === 'all' ? 'active-filter' : ''}" data-filter="all" style="padding: 0.35rem 0.85rem; font-size: 0.8rem; border-radius: 16px; border: none; font-weight: 500;">All Categories</button>
                                     <button class="btn btn-secondary filter-tab ${this.activeFilter === 'health' ? 'active-filter' : ''}" data-filter="health" style="padding: 0.35rem 0.85rem; font-size: 0.8rem; border-radius: 16px; border: none; font-weight: 500;">🧼 Hygiene & Health</button>
                                     <button class="btn btn-secondary filter-tab ${this.activeFilter === 'mind' ? 'active-filter' : ''}" data-filter="mind" style="padding: 0.35rem 0.85rem; font-size: 0.8rem; border-radius: 16px; border: none; font-weight: 500;">🧹 Room & Cleanliness</button>
                                 </div>
@@ -621,18 +621,19 @@ const Dashboard = {
                         </div>
 
                         <!-- Main Checklist Card (Decluttered & Correlated with Blueprints) -->
-                        <div class="glass-card" style="padding: 1.5rem 1.5rem; border-radius: var(--radius-md);">
-                            <div class="card-header-flex" style="margin-bottom: 1.25rem; flex-wrap: wrap; gap: 0.75rem;">
+                        <div class="glass-card" style="padding: 1.5rem; border-radius: var(--radius-md); width: 100%; box-sizing: border-box;">
+                            <div class="card-header-flex" style="margin-bottom: 1.25rem; flex-wrap: wrap; gap: 0.75rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem;">
                                 <div>
                                     <h3 class="card-title" style="font-size: 1.15rem; font-weight: 500;"><i data-lucide="check-circle" style="color: var(--primary); width: 20px; height: 20px;"></i> Daily Systems Checklist</h3>
-                                    <p class="card-subtitle" style="font-size: 0.8rem;">Daily routines grouped by identity (home time only).</p>
+                                    <p class="card-subtitle" style="font-size: 0.8rem; margin: 2px 0 0 0;">Daily routines grouped by identity (home time only).</p>
                                 </div>
 
-                                <!-- V4 Segmented Time of Day Filter -->
-                                <div class="time-filter-segmented" style="display: inline-flex; background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: 20px; padding: 2px; height: fit-content; align-self: center;">
-                                    <button class="btn time-filter-btn ${this.activeTimeFilter === 'all' ? 'active-segment' : ''}" data-time="all" style="padding: 0.25rem 0.75rem; font-size: 0.75rem; border: none; background: transparent; border-radius: 18px; font-weight: 600; color: var(--text-secondary); transition: all 0.2s; height: auto;">✨ All</button>
-                                    <button class="btn time-filter-btn ${this.activeTimeFilter === 'morning' ? 'active-segment' : ''}" data-time="morning" style="padding: 0.25rem 0.75rem; font-size: 0.75rem; border: none; background: transparent; border-radius: 18px; font-weight: 600; color: var(--text-secondary); transition: all 0.2s; height: auto;">🌅 Morning</button>
-                                    <button class="btn time-filter-btn ${this.activeTimeFilter === 'evening' ? 'active-segment' : ''}" data-time="evening" style="padding: 0.25rem 0.75rem; font-size: 0.75rem; border: none; background: transparent; border-radius: 18px; font-weight: 600; color: var(--text-secondary); transition: all 0.2s; height: auto;">🌙 Evening</button>
+                                <!-- V4 Segmented Time of Day Filter (3 routines: Morning, Evening, Night) -->
+                                <div class="time-filter-segmented" style="display: inline-flex; background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: 20px; padding: 2px; height: fit-content; align-self: center; flex-wrap: wrap; gap: 2px;">
+                                    <button class="btn time-filter-btn ${this.activeTimeFilter === 'all' ? 'active-segment' : ''}" data-time="all" style="padding: 0.25rem 0.65rem; font-size: 0.72rem; border: none; background: transparent; border-radius: 18px; font-weight: 600; color: var(--text-secondary); transition: all 0.2s; height: auto;">✨ All</button>
+                                    <button class="btn time-filter-btn ${this.activeTimeFilter === 'morning' ? 'active-segment' : ''}" data-time="morning" style="padding: 0.25rem 0.65rem; font-size: 0.72rem; border: none; background: transparent; border-radius: 18px; font-weight: 600; color: var(--text-secondary); transition: all 0.2s; height: auto;">🌅 Morning</button>
+                                    <button class="btn time-filter-btn ${this.activeTimeFilter === 'evening' ? 'active-segment' : ''}" data-time="evening" style="padding: 0.25rem 0.65rem; font-size: 0.72rem; border: none; background: transparent; border-radius: 18px; font-weight: 600; color: var(--text-secondary); transition: all 0.2s; height: auto;">🌙 Evening</button>
+                                    <button class="btn time-filter-btn ${this.activeTimeFilter === 'night' ? 'active-segment' : ''}" data-time="night" style="padding: 0.25rem 0.65rem; font-size: 0.72rem; border: none; background: transparent; border-radius: 18px; font-weight: 600; color: var(--text-secondary); transition: all 0.2s; height: auto;">🌃 Night</button>
                                 </div>
                             </div>
 
@@ -640,41 +641,13 @@ const Dashboard = {
                                 ${this._renderGroupedHabits(filteredHabits, log, blueprints.identities)}
                             </div>
                         </div>
-
-                        <!-- Daily Focus Tasks Card (Phase 11) -->
-                        <div class="glass-card" style="padding: 1.5rem; border-radius: var(--radius-md); margin-top: 1.5rem;">
-                            <div class="card-header-flex" style="margin-bottom: 1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem;">
-                                <div>
-                                    <h3 class="card-title" style="font-size: 1.1rem; font-weight: 500; display: flex; align-items: center; gap: 6px;">
-                                        <i data-lucide="check-square" style="color: var(--primary); width: 18px; height: 18px;"></i> Daily Focus Tasks
-                                    </h3>
-                                    <p class="card-subtitle" style="font-size: 0.78rem;">One-off focus tasks to accomplish today alongside your recurring habits.</p>
-                                </div>
-                                <span style="font-size: 0.72rem; font-weight: 700; background: var(--sidebar-active-bg); color: var(--primary); padding: 2px 8px; border-radius: 8px;" id="tasks-count-badge">
-                                    0 Tasks Done
-                                </span>
-                            </div>
-
-                            <!-- Task input form -->
-                            <form id="new-task-form" style="display: flex; gap: 0.5rem; margin-bottom: 1.25rem;">
-                                <input type="text" id="task-input-text" class="form-control" placeholder="Add a simple daily task (e.g. Wash clothes, buy soap)..." style="font-size: 0.85rem; padding: 0.5rem 0.75rem;" required>
-                                <button type="submit" class="btn btn-primary" style="padding: 0.5rem 1rem; border-radius: 12px; font-size: 0.8rem; font-weight: 600; display: flex; align-items: center; gap: 4px;">
-                                    <i data-lucide="plus" style="width: 14px; height: 14px;"></i> Add
-                                </button>
-                            </form>
-
-                            <!-- Task items list -->
-                            <div id="tasks-list-container" style="display: flex; flex-direction: column; gap: 0.5rem;">
-                                ${this._renderTasksListMarkup(this.selectedDate)}
-                            </div>
-                        </div>
                     </div>
 
                     <!-- Right: Sleep Logger & Completion stats & Reflections Preview -->
-                    <div style="grid-column: span 4; display: flex; flex-direction: column; gap: 1.5rem;">
+                    <div class="column-sidebar" style="display: flex; flex-direction: column; gap: 1.5rem; width: 100%; box-sizing: border-box;">
                         
-                        <!-- Completion card -->
-                        <div class="glass-card text-center" style="display: flex; flex-direction: column; align-items: center; padding: 1.5rem; border-radius: var(--radius-md);">
+                        <!-- Completion card (Matching padding & border-radius) -->
+                        <div class="glass-card text-center" style="display: flex; flex-direction: column; align-items: center; padding: 1.5rem; border-radius: var(--radius-md); width: 100%; box-sizing: border-box;">
                             <h4 style="font-size: 0.95rem; font-weight: 500; margin-bottom: 1rem; color: var(--text-primary);">Routines Completed</h4>
                             
                             <div class="progress-ring-container" style="width: 100px; height: 100px; margin-bottom: 1rem;">
@@ -698,8 +671,8 @@ const Dashboard = {
                             </div>
                         </div>
 
-                        <!-- Dedicated Bedtime Logger Card -->
-                        <div class="glass-card" style="padding: 1.25rem 1.5rem; border-radius: var(--radius-md);">
+                        <!-- Dedicated Bedtime Logger Card (Matching padding & border-radius) -->
+                        <div class="glass-card" style="padding: 1.5rem; border-radius: var(--radius-md); width: 100%; box-sizing: border-box;">
                             <h4 style="font-size: 1rem; font-weight: 500; display: flex; align-items: center; gap: 6px; margin-bottom: 0.75rem; color: var(--text-primary);">
                                 <i data-lucide="moon" style="color: var(--primary); width: 18px; height: 18px;"></i> Bedtime & Sleep Logger
                             </h4>
@@ -708,9 +681,9 @@ const Dashboard = {
                             </div>
                         </div>
 
-                        <!-- Correlated Daily Reflection Summary Card -->
+                        <!-- Correlated Daily Reflection Summary Card (Matching padding & border-radius) -->
                         ${(log.mood > 0 || winsText || hardText || anxietyText || freeText) ? `
-                        <div class="glass-card" style="padding: 1.25rem 1.5rem; border-radius: var(--radius-md);">
+                        <div class="glass-card" style="padding: 1.5rem; border-radius: var(--radius-md); width: 100%; box-sizing: border-box;">
                             <h4 style="font-size: 1rem; font-weight: 500; display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.75rem; color: var(--text-primary);">
                                 <span style="display: flex; align-items: center; gap: 6px;"><i data-lucide="book-open" style="color: var(--primary); width: 18px; height: 18px;"></i> Day Reflection Log</span>
                                 <span style="font-size: 0.72rem; color: var(--text-secondary); font-weight: 600; background: var(--sidebar-active-bg); padding: 2px 8px; border-radius: 8px;">Saved</span>
@@ -894,7 +867,9 @@ const Dashboard = {
             const isHot = streak.current >= 5;
             
             // Render beautiful clean habit cards with time of day tags
-            const timeTag = habit.timeOfDay === 'morning' ? '🌅 Morning' : '🌙 Evening';
+            const timeTag = habit.timeOfDay === 'morning' 
+                ? '🌅 Morning' 
+                : (habit.timeOfDay === 'night' ? '🌃 Night' : '🌙 Evening');
             
             return `
                 <div class="habit-card ${isCompleted ? 'completed' : ''} animate-fade-in" data-id="${habit.id}" style="padding: 0.85rem 1rem; border-radius: var(--radius-md); position: relative;">
@@ -1871,6 +1846,7 @@ const Blueprint = {
                                             <select id="new-habit-time" class="form-control" style="font-size: 0.85rem; padding: 0.5rem 0.75rem;">
                                                 <option value="morning">🌅 Morning (Before Office)</option>
                                                 <option value="evening">🌙 Evening (After Office)</option>
+                                                <option value="night">🌃 Night (Before Bed)</option>
                                             </select>
                                         </div>
                                     </div>
@@ -2473,7 +2449,9 @@ const Analytics = {
                     
                     <div style="display: flex; flex-direction: column; gap: 0.75rem;">
                         ${habitStats.map(hs => {
-                            const timingTag = hs.habit.timeOfDay === 'morning' ? '🌅 Morning' : '🌙 Evening';
+                            const timingTag = hs.habit.timeOfDay === 'morning' 
+                                ? '🌅 Morning' 
+                                : (hs.habit.timeOfDay === 'night' ? '🌃 Night' : '🌙 Evening');
                             const streakBadgeColor = hs.streak >= 5 ? 'background: rgba(239, 68, 68, 0.1); color: #ef4444; border-color: rgba(239,68,68,0.2);' : 'background: rgba(255, 255, 255, 0.02); color: var(--text-secondary); border-color: var(--border-color);';
                             
                             return `
@@ -3155,6 +3133,7 @@ class AppShell {
         this.currentView = null;
         this.views = {
             dashboard: Dashboard,
+            tasks: FocusTasks,
             journal: Journal,
             blueprint: Blueprint,
             analytics: Analytics,

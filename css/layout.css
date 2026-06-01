@@ -351,3 +351,19 @@
         gap: 1.25rem;
     }
 }
+
+/* Responsive Grid Columns (V4 Mobile Upgrade) */
+.column-main {
+    grid-column: span 8;
+}
+
+.column-sidebar {
+    grid-column: span 4;
+}
+
+@media (max-width: 1024px) {
+    .column-main, .column-sidebar {
+        grid-column: span 12 !important;
+    }
+}
+
