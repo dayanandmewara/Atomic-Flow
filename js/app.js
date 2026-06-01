@@ -544,11 +544,23 @@ const AtomicManager = {
 const Dashboard = {
     selectedDate: new Date().toISOString().split('T')[0],
     activeFilter: 'all',
+    activeTimeFilter: 'all', // 'all', 'morning', 'evening'
     activeTwoMinuteHabits: {},
 
     render(container) {
         this.selectedDate = new Date().toISOString().split('T')[0];
         this.activeFilter = 'all';
+        
+        // Smart Auto-Detect Time of Day: Morning before 12:00 PM, Evening after 5:00 PM
+        const hour = new Date().getHours();
+        if (hour < 12) {
+            this.activeTimeFilter = 'morning';
+        } else if (hour >= 17) {
+            this.activeTimeFilter = 'evening';
+        } else {
+            this.activeTimeFilter = 'all';
+        }
+        
         this.container = container;
         this.updateView();
     },
@@ -557,9 +569,13 @@ const Dashboard = {
         const habits = db.getHabits();
         const blueprints = db.getBlueprints();
         const log = db.getLogForDate(this.selectedDate);
-        const filteredHabits = this.activeFilter === 'all' 
-            ? habits 
-            : habits.filter(h => h.category === this.activeFilter);
+        
+        // V4: Category + Time of Day dual-filter system
+        const filteredHabits = habits.filter(h => {
+            const matchesCategory = this.activeFilter === 'all' || h.category === this.activeFilter;
+            const matchesTime = this.activeTimeFilter === 'all' || h.timeOfDay === this.activeTimeFilter;
+            return matchesCategory && matchesTime;
+        });
 
         const warnings = AtomicManager.getNeverMissTwiceWarnings();
         const stats = this._getDayStats(log, habits);
@@ -606,10 +622,17 @@ const Dashboard = {
 
                         <!-- Main Checklist Card (Decluttered & Correlated with Blueprints) -->
                         <div class="glass-card" style="padding: 1.5rem 1.5rem; border-radius: var(--radius-md);">
-                            <div class="card-header-flex" style="margin-bottom: 1.5rem;">
+                            <div class="card-header-flex" style="margin-bottom: 1.25rem; flex-wrap: wrap; gap: 0.75rem;">
                                 <div>
                                     <h3 class="card-title" style="font-size: 1.15rem; font-weight: 500;"><i data-lucide="check-circle" style="color: var(--primary); width: 20px; height: 20px;"></i> Daily Systems Checklist</h3>
-                                    <p class="card-subtitle" style="font-size: 0.8rem;">Daily routines grouped by the identity you are proving today (home time only).</p>
+                                    <p class="card-subtitle" style="font-size: 0.8rem;">Daily routines grouped by identity (home time only).</p>
+                                </div>
+
+                                <!-- V4 Segmented Time of Day Filter -->
+                                <div class="time-filter-segmented" style="display: inline-flex; background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: 20px; padding: 2px; height: fit-content; align-self: center;">
+                                    <button class="btn time-filter-btn ${this.activeTimeFilter === 'all' ? 'active-segment' : ''}" data-time="all" style="padding: 0.25rem 0.75rem; font-size: 0.75rem; border: none; background: transparent; border-radius: 18px; font-weight: 600; color: var(--text-secondary); transition: all 0.2s; height: auto;">✨ All</button>
+                                    <button class="btn time-filter-btn ${this.activeTimeFilter === 'morning' ? 'active-segment' : ''}" data-time="morning" style="padding: 0.25rem 0.75rem; font-size: 0.75rem; border: none; background: transparent; border-radius: 18px; font-weight: 600; color: var(--text-secondary); transition: all 0.2s; height: auto;">🌅 Morning</button>
+                                    <button class="btn time-filter-btn ${this.activeTimeFilter === 'evening' ? 'active-segment' : ''}" data-time="evening" style="padding: 0.25rem 0.75rem; font-size: 0.75rem; border: none; background: transparent; border-radius: 18px; font-weight: 600; color: var(--text-secondary); transition: all 0.2s; height: auto;">🌙 Evening</button>
                                 </div>
                             </div>
 
@@ -1144,6 +1167,16 @@ const Dashboard = {
                 tabs.forEach(t => t.classList.remove('active-filter'));
                 tab.classList.add('active-filter');
                 this.activeFilter = tab.getAttribute('data-filter');
+                this.updateView();
+            });
+        });
+
+        const timeBtns = this.container.querySelectorAll('.time-filter-btn');
+        timeBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                timeBtns.forEach(b => b.classList.remove('active-segment'));
+                btn.classList.add('active-segment');
+                this.activeTimeFilter = btn.getAttribute('data-time');
                 this.updateView();
             });
         });

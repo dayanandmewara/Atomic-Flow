@@ -850,3 +850,109 @@ textarea.form-control {
     margin-top: 10px;
 }
 
+/* V4 Active Segment and Capsule Button Styles */
+.active-filter {
+    background: var(--primary) !important;
+    color: #0d0d0f !important;
+    box-shadow: 0 2px 8px rgba(184, 240, 100, 0.25) !important;
+}
+
+.active-segment {
+    background: var(--primary) !important;
+    color: #0d0d0f !important;
+    box-shadow: 0 2px 6px rgba(184, 240, 100, 0.2) !important;
+}
+
+.filter-tab {
+    transition: all var(--transition-fast);
+}
+
+.time-filter-btn {
+    transition: all var(--transition-fast) !important;
+}
+
+/* Mobile Responsive Cleanliness & Compact Habits Upgrade */
+@media (max-width: 576px) {
+    /* Compact habit cards to prevent scrolling on phone */
+    .habit-card {
+        padding: 0.65rem 0.75rem !important;
+        margin-bottom: 0.5rem !important;
+        gap: 0.65rem !important;
+        border-radius: var(--radius-md) !important;
+    }
+    
+    .habit-card::before {
+        width: 4px !important;
+    }
+    
+    .checkbox-wrapper {
+        width: 26px !important;
+        height: 26px !important;
+    }
+    
+    .checkmark {
+        height: 26px !important;
+        width: 26px !important;
+        border-radius: 6px !important;
+    }
+    
+    .checkmark i {
+        font-size: 0.8rem !important;
+        width: 14px !important;
+        height: 14px !important;
+    }
+    
+    .habit-name {
+        font-size: 0.85rem !important;
+        font-weight: 500 !important;
+    }
+    
+    .habit-desc {
+        font-size: 0.72rem !important;
+        margin-top: 1px !important;
+    }
+    
+    /* Make buttons and tags more compact on mobile */
+    .btn-twomin-trigger {
+        font-size: 0.65rem !important;
+        padding: 1px 6px !important;
+        border-radius: 8px !important;
+    }
+    
+    .streak-badge {
+        font-size: 0.68rem !important;
+        padding: 1px 4px !important;
+    }
+    
+    .glass-card {
+        padding: 1rem !important;
+        border-radius: var(--radius-md) !important;
+    }
+    
+    .view-grid {
+        gap: 1rem !important;
+    }
+
+    .card-header-flex {
+        margin-bottom: 1rem !important;
+    }
+    
+    .card-title {
+        font-size: 1rem !important;
+    }
+    
+    .card-subtitle {
+        font-size: 0.72rem !important;
+    }
+
+    /* Segmented switch sliding layout */
+    .filter-tabs-wrapper {
+        display: flex;
+        overflow-x: auto;
+        padding-bottom: 4px;
+        -webkit-overflow-scrolling: touch;
+        gap: 0.25rem;
+    }
+}
+
+
