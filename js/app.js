@@ -551,12 +551,14 @@ const Dashboard = {
         this.selectedDate = new Date().toISOString().split('T')[0];
         this.activeFilter = 'all';
         
-        // Smart Auto-Detect Time of Day: Morning before 12:00 PM, Evening after 5:00 PM
+        // Smart Auto-Detect Time of Day: Morning before 12:00 PM, Evening 5:00 PM - 9:00 PM, Night after 9:00 PM
         const hour = new Date().getHours();
         if (hour < 12) {
             this.activeTimeFilter = 'morning';
-        } else if (hour >= 17) {
+        } else if (hour >= 17 && hour < 21) {
             this.activeTimeFilter = 'evening';
+        } else if (hour >= 21 || hour < 5) {
+            this.activeTimeFilter = 'night';
         } else {
             this.activeTimeFilter = 'all';
         }
@@ -1025,115 +1027,7 @@ const Dashboard = {
         return { pct, done, pending };
     },
 
-    _renderTasksListMarkup(dateStr) {
-        const tasks = db.getTasks().filter(t => {
-            if (!t.completed) {
-                // Carry forward: show active uncompleted tasks created on or before selected date
-                return t.date <= dateStr;
-            } else {
-                // Keep completed tasks only on the day they were achieved
-                return t.date === dateStr;
-            }
-        });
 
-        if (tasks.length === 0) {
-            return `
-                <div style="text-align: center; padding: 1.5rem; color: var(--text-secondary); border: 1px dashed var(--border-color); border-radius: 8px; font-size: 0.8rem; font-style: italic;">
-                    No focus tasks active for this day.
-                </div>
-            `;
-        }
-
-        // Count completed
-        const completed = tasks.filter(t => t.completed).length;
-        
-        // Update badge dynamically
-        setTimeout(() => {
-            const badge = this.container.querySelector('#tasks-count-badge');
-            if (badge) {
-                badge.innerText = `${completed} / ${tasks.length} Done`;
-            }
-        }, 0);
-
-        return tasks.map(task => `
-            <div class="animate-fade-in task-item-row" data-id="${task.id}" style="display: flex; align-items: center; justify-content: space-between; background: rgba(255,255,255,0.01); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.5rem 0.75rem; transition: background 0.2s, opacity 0.5s, transform 0.5s;">
-                <label class="checkbox-wrapper" style="width: 20px; height: 20px; margin-bottom: 0; flex-shrink: 0;">
-                    <input type="checkbox" class="task-check" ${task.completed ? 'checked' : ''}>
-                    <span class="checkmark" style="width: 20px; height: 20px; border-radius: 4px; border-width: 1px;"><i data-lucide="check" style="width: 10px; height: 10px;"></i></span>
-                </label>
-                
-                <span class="task-text" style="flex: 1; font-size: 0.85rem; margin-left: 0.75rem; color: ${task.completed ? 'var(--text-muted)' : 'var(--text-primary)'}; text-decoration: ${task.completed ? 'line-through' : 'none'}; transition: color 0.2s;">
-                    ${task.text}
-                </span>
-
-                <div style="display: flex; align-items: center; gap: 8px;">
-                    ${task.completed ? `
-                        <span style="font-size: 0.65rem; font-weight: 700; color: var(--color-success); background: rgba(30,142,62,0.05); padding: 1px 6px; border-radius: 4px; border: 1px solid rgba(30,142,62,0.15);">
-                            +5 XP 🔥
-                        </span>
-                    ` : ''}
-                    <button class="btn-delete-task" style="background: transparent; border: none; cursor: pointer; color: var(--text-muted); padding: 2px;"><i data-lucide="trash-2" style="width: 14px; height: 14px;"></i></button>
-                </div>
-            </div>
-        `).join('');
-    },
-
-    _refreshTasksList() {
-        const container = this.container.querySelector('#tasks-list-container');
-        if (container) {
-            container.innerHTML = this._renderTasksListMarkup(this.selectedDate);
-            lucide.createIcons();
-            this._setupTaskItemListeners();
-        }
-    },
-
-    _setupTaskItemListeners() {
-        const taskRows = this.container.querySelectorAll('.task-item-row');
-        taskRows.forEach(row => {
-            const taskId = row.getAttribute('data-id');
-            const check = row.querySelector('.task-check');
-            const deleteBtn = row.querySelector('.btn-delete-task');
-            
-            if (check) {
-                check.addEventListener('change', (e) => {
-                    const tasks = db.getTasks();
-                    const task = tasks.find(t => t.id === taskId);
-                    if (task) {
-                        task.completed = e.target.checked;
-                        db.saveTask(task);
-                        
-                        if (task.completed) {
-                            db.addXp(5);
-                            this._playConfetti();
-                            
-                            // Visual slide out and fade
-                            row.style.opacity = '0.5';
-                            row.style.transform = 'translateX(10px)';
-                            row.style.pointerEvents = 'none';
-                            
-                            // Auto delete completed task after satisfying 1 second delay
-                            setTimeout(() => {
-                                db.deleteTask(taskId);
-                                this._refreshTasksList();
-                                this._updateSidebarProgress();
-                            }, 1000);
-                        } else {
-                            this._refreshTasksList();
-                            this._updateSidebarProgress();
-                        }
-                    }
-                });
-            }
-
-            if (deleteBtn) {
-                deleteBtn.addEventListener('click', () => {
-                    db.deleteTask(taskId);
-                    this._refreshTasksList();
-                    this._updateSidebarProgress();
-                });
-            }
-        });
-    },
 
     _setupListeners() {
         const tabs = this.container.querySelectorAll('.filter-tab');
@@ -1312,25 +1206,7 @@ const Dashboard = {
             });
         }
 
-        // Daily Focus Tasks Listeners (Phase 11)
-        const taskForm = this.container.querySelector('#new-task-form');
-        if (taskForm) {
-            taskForm.addEventListener('submit', (e) => {
-                e.preventDefault();
-                const input = this.container.querySelector('#task-input-text');
-                const text = input.value.trim();
-                if (text) {
-                    db.saveTask({
-                        text: text,
-                        date: this.selectedDate
-                    });
-                    input.value = '';
-                    this._refreshTasksList();
-                }
-            });
-        }
 
-        this._setupTaskItemListeners();
     },
 
     _floatXpNotification(card, amount, isChecking) {
@@ -1477,13 +1353,13 @@ const Journal = {
         const freeText = log.journalNotes || log.free || '';
 
         this.container.innerHTML = `
-            <div class="animate-fade-in" style="width: 100%;">
+            <div class="animate-fade-in" style="width: 100%; box-sizing: border-box;">
                 <div class="view-grid">
                     <!-- Left: Mood & Energy Tracker -->
-                    <div style="grid-column: span 5; display: flex; flex-direction: column; gap: 1.5rem;">
+                    <div class="column-sidebar" style="grid-column: span 5; display: flex; flex-direction: column; gap: 1.5rem; width: 100%; box-sizing: border-box;">
                         
                         <!-- Date selector with chevrons -->
-                        <div class="glass-card" style="padding: 1.25rem; border-radius: var(--radius-md);">
+                        <div class="glass-card" style="padding: 1.25rem; border-radius: var(--radius-md); width: 100%; box-sizing: border-box;">
                             <div style="display: flex; justify-content: space-between; align-items: center;">
                                 <label style="font-weight: 500; font-size: 0.9rem; color: var(--text-primary);">Log Entry Date</label>
                                 <div style="display: flex; align-items: center; gap: 0.25rem;">
@@ -1495,7 +1371,7 @@ const Journal = {
                         </div>
 
                         <!-- Mood Card -->
-                        <div class="glass-card" style="border-radius: var(--radius-md); padding: 1.25rem;">
+                        <div class="glass-card" style="border-radius: var(--radius-md); padding: 1.25rem; width: 100%; box-sizing: border-box;">
                             <h3 class="card-title" style="margin-bottom: 1rem; font-weight: 500; font-size: 0.95rem;">
                                 <i data-lucide="smile" style="color: var(--primary); width: 18px; height: 18px;"></i> How are you feeling right now?
                             </h3>
@@ -1509,7 +1385,7 @@ const Journal = {
                         </div>
 
                         <!-- Energy Card -->
-                        <div class="glass-card" style="border-radius: var(--radius-md); padding: 1.25rem;">
+                        <div class="glass-card" style="border-radius: var(--radius-md); padding: 1.25rem; width: 100%; box-sizing: border-box;">
                             <h3 class="card-title" style="margin-bottom: 1rem; font-weight: 500; font-size: 0.95rem;">
                                 <i data-lucide="zap" style="color: var(--color-warning); width: 18px; height: 18px;"></i> Energy level today
                             </h3>
@@ -1528,7 +1404,7 @@ const Journal = {
                         </div>
 
                         <!-- Today's Habit Compliance Panel -->
-                        <div class="glass-card" style="border-radius: var(--radius-md); padding: 1.25rem;">
+                        <div class="glass-card" style="border-radius: var(--radius-md); padding: 1.25rem; width: 100%; box-sizing: border-box;">
                             <h3 class="card-title" style="margin-bottom: 0.75rem; font-weight: 500; font-size: 0.95rem; display: flex; justify-content: space-between; align-items: center;">
                                 <span style="display: flex; align-items: center; gap: 6px;"><i data-lucide="check-square" style="color: var(--primary); width: 18px; height: 18px;"></i> Routine Compliance</span>
                                 <span style="font-size: 0.75rem; font-weight: 700; background: var(--sidebar-active-bg); color: var(--primary); padding: 2px 8px; border-radius: 12px;">${completedCount} / ${totalCount} Done</span>
@@ -1541,8 +1417,8 @@ const Journal = {
                     </div>
 
                     <!-- Right: Reflections -->
-                    <div style="grid-column: span 7; display: flex; flex-direction: column; gap: 1.5rem;">
-                        <div class="glass-card" style="padding: 1.5rem 1.75rem; border-radius: var(--radius-md);">
+                    <div class="column-main" style="grid-column: span 7; display: flex; flex-direction: column; gap: 1.5rem; width: 100%; box-sizing: border-box;">
+                        <div class="glass-card" style="padding: 1.5rem 1.75rem; border-radius: var(--radius-md); width: 100%; box-sizing: border-box;">
                             <div class="card-header-flex" style="border-bottom: 1px solid var(--border-color); padding-bottom: 1rem; margin-bottom: 1.25rem;">
                                 <div>
                                     <h3 class="card-title" style="font-weight: 500; font-size: 1.15rem;"><i data-lucide="book-open" style="color: var(--primary); width: 20px; height: 20px;"></i> Daily Reflection</h3>
@@ -1690,7 +1566,258 @@ const Journal = {
             }, 3000);
         }
     }
+
 };
+
+// =========================================================================
+// 4b. DEDICATED FOCUS TASKS VIEW COMPONENT [NEW]
+// =========================================================================
+const FocusTasks = {
+    selectedDate: new Date().toISOString().split('T')[0],
+
+    render(container) {
+        this.selectedDate = new Date().toISOString().split('T')[0];
+        this.container = container;
+        this.updateView();
+    },
+
+    updateView() {
+        this.container.innerHTML = `
+            <div class="animate-fade-in" style="width: 100%; box-sizing: border-box;">
+                <div class="view-grid">
+                    <!-- Main Checklist Card -->
+                    <div class="column-main" style="display: flex; flex-direction: column; gap: 1.5rem; width: 100%; box-sizing: border-box;">
+                        
+                        <!-- Date selector card -->
+                        <div class="glass-card" style="padding: 0.75rem 1.25rem; border-radius: var(--radius-md); width: 100%; box-sizing: border-box;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem;">
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <h3 style="margin: 0; font-size: 1.15rem; font-weight: 500; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
+                                        <i data-lucide="check-square" style="color: var(--primary); width: 22px; height: 22px;"></i> Focus Tasks
+                                    </h3>
+                                    <span class="badge" id="tasks-count-badge" style="font-size: 0.72rem; font-weight: 700; background: var(--sidebar-active-bg); color: var(--primary); padding: 2px 8px; border-radius: 12px; border: 1px solid rgba(99, 102, 241, 0.15);">0 / 0 Done</span>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 0.25rem;">
+                                    <button class="btn btn-secondary" id="btn-prev-task-day" style="padding: 0.3rem 0.5rem; border: none; background: transparent;"><i data-lucide="chevron-left" style="width: 16px; height: 16px;"></i></button>
+                                    <input type="date" id="tasks-date-picker" class="form-control" value="${this.selectedDate}" style="padding: 0.3rem 0.5rem; font-size: 0.85rem; width: 130px; border-radius: 16px; height: auto; text-align: center; border: 1px solid var(--border-color);">
+                                    <button class="btn btn-secondary" id="btn-next-task-day" style="padding: 0.3rem 0.5rem; border: none; background: transparent;"><i data-lucide="chevron-right" style="width: 16px; height: 16px;"></i></button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Tasks List and Input Form -->
+                        <div class="glass-card" style="padding: 1.5rem; border-radius: var(--radius-md); width: 100%; box-sizing: border-box;">
+                            
+                            <!-- Add task form -->
+                            <form id="new-task-form" style="display: flex; gap: 0.75rem; margin-bottom: 1.5rem;">
+                                <input type="text" id="task-input-text" class="form-control" placeholder="What is your focus right now? e.g. Buy groceries, Read 5 pages..." style="flex: 1; font-size: 0.85rem; border-radius: 20px; padding: 0.6rem 1rem;" required>
+                                <button type="submit" class="btn btn-primary" style="border-radius: 20px; padding: 0.6rem 1.25rem; font-size: 0.82rem; font-weight: 600;">
+                                    <i data-lucide="plus" style="width: 16px; height: 16px;"></i> Add Focus
+                                </button>
+                            </form>
+
+                            <!-- Tasks list container -->
+                            <div id="tasks-list-container" style="display: flex; flex-direction: column; gap: 0.75rem;">
+                                <!-- Dynamic task rows go here -->
+                            </div>
+
+                        </div>
+                    </div>
+
+                    <!-- Sidebar info card -->
+                    <div class="column-sidebar" style="display: flex; flex-direction: column; gap: 1.5rem; width: 100%; box-sizing: border-box;">
+                        <div class="glass-card" style="padding: 1.25rem; border-radius: var(--radius-md); width: 100%; box-sizing: border-box;">
+                            <h4 style="font-size: 0.95rem; font-weight: 500; margin-bottom: 0.75rem; color: var(--text-primary); display: flex; align-items: center; gap: 6px;">
+                                <i data-lucide="target" style="color: var(--primary); width: 18px; height: 18px;"></i> Carry Forward System
+                            </h4>
+                            <p style="font-size: 0.78rem; color: var(--text-secondary); line-height: 1.5; margin: 0 0 0.75rem 0;">
+                                Uncompleted tasks will automatically carry forward to subsequent days. This prevents them from slipping through the cracks until they are checked off or deleted.
+                            </p>
+                            <div style="background: rgba(99, 102, 241, 0.05); border: 1px solid rgba(99, 102, 241, 0.15); border-radius: 8px; padding: 0.75rem; font-size: 0.75rem; color: var(--primary-light);">
+                                <span style="font-weight: 600; display: block; margin-bottom: 2px;">⚡ Level Up!</span>
+                                Completing focus tasks awards you +5 XP. Consistently complete your focus items to unlock higher levels and titles.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        lucide.createIcons();
+        this._setupListeners();
+        this._refreshTasksList();
+    },
+
+    _setupListeners() {
+        const picker = this.container.querySelector('#tasks-date-picker');
+        picker.addEventListener('change', (e) => {
+            this.selectedDate = e.target.value;
+            this._refreshTasksList();
+        });
+
+        // Chevron date controls
+        this.container.querySelector('#btn-prev-task-day').addEventListener('click', () => {
+            const current = new Date(this.selectedDate);
+            current.setDate(current.getDate() - 1);
+            this.selectedDate = current.toISOString().split('T')[0];
+            this.container.querySelector('#tasks-date-picker').value = this.selectedDate;
+            this._refreshTasksList();
+        });
+
+        this.container.querySelector('#btn-next-task-day').addEventListener('click', () => {
+            const current = new Date(this.selectedDate);
+            current.setDate(current.getDate() + 1);
+            this.selectedDate = current.toISOString().split('T')[0];
+            this.container.querySelector('#tasks-date-picker').value = this.selectedDate;
+            this._refreshTasksList();
+        });
+
+        // New task form submission
+        const taskForm = this.container.querySelector('#new-task-form');
+        taskForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const input = this.container.querySelector('#task-input-text');
+            const val = input.value.trim();
+            if (val) {
+                db.saveTask({
+                    text: val,
+                    date: this.selectedDate
+                });
+                input.value = '';
+                this._refreshTasksList();
+                this._updateSidebarProgress();
+            }
+        });
+    },
+
+    _renderTasksListMarkup(dateStr) {
+        const tasks = db.getTasks().filter(t => {
+            if (!t.completed) {
+                // Carry forward: show active uncompleted tasks created on or before selected date
+                return t.date <= dateStr;
+            } else {
+                // Keep completed tasks only on the day they were achieved
+                return t.date === dateStr;
+            }
+        });
+
+        if (tasks.length === 0) {
+            return `
+                <div style="text-align: center; padding: 1.5rem; color: var(--text-secondary); border: 1px dashed var(--border-color); border-radius: 8px; font-size: 0.8rem; font-style: italic;">
+                    No focus tasks active for this day.
+                </div>
+            `;
+        }
+
+        // Count completed
+        const completed = tasks.filter(t => t.completed).length;
+        
+        // Update badge dynamically
+        const badge = this.container.querySelector('#tasks-count-badge');
+        if (badge) {
+            badge.innerText = `${completed} / ${tasks.length} Done`;
+        }
+
+        return tasks.map(task => `
+            <div class="animate-fade-in task-item-row" data-id="${task.id}" style="display: flex; align-items: center; justify-content: space-between; background: rgba(255,255,255,0.01); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.5rem 0.75rem; transition: background 0.2s, opacity 0.5s, transform 0.5s;">
+                <label class="checkbox-wrapper" style="width: 20px; height: 20px; margin-bottom: 0; flex-shrink: 0;">
+                    <input type="checkbox" class="task-check" ${task.completed ? 'checked' : ''}>
+                    <span class="checkmark" style="width: 20px; height: 20px; border-radius: 4px; border-width: 1px;"><i data-lucide="check" style="width: 10px; height: 10px;"></i></span>
+                </label>
+                
+                <span class="task-text" style="flex: 1; font-size: 0.85rem; margin-left: 0.75rem; color: ${task.completed ? 'var(--text-muted)' : 'var(--text-primary)'}; text-decoration: ${task.completed ? 'line-through' : 'none'}; transition: color 0.2s;">
+                    ${task.text}
+                </span>
+
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    ${task.completed ? `
+                        <span style="font-size: 0.65rem; font-weight: 700; color: var(--color-success); background: rgba(30,142,62,0.05); padding: 1px 6px; border-radius: 4px; border: 1px solid rgba(30,142,62,0.15);">
+                            +5 XP 🔥
+                        </span>
+                    ` : ''}
+                    <button class="btn-delete-task" style="background: transparent; border: none; cursor: pointer; color: var(--text-muted); padding: 2px;"><i data-lucide="trash-2" style="width: 14px; height: 14px;"></i></button>
+                </div>
+            </div>
+        `).join('');
+    },
+
+    _refreshTasksList() {
+        const container = this.container.querySelector('#tasks-list-container');
+        if (container) {
+            container.innerHTML = this._renderTasksListMarkup(this.selectedDate);
+            lucide.createIcons();
+            this._setupTaskItemListeners();
+        }
+    },
+
+    _setupTaskItemListeners() {
+        const taskRows = this.container.querySelectorAll('.task-item-row');
+        taskRows.forEach(row => {
+            const taskId = row.getAttribute('data-id');
+            const check = row.querySelector('.task-check');
+            const deleteBtn = row.querySelector('.btn-delete-task');
+            
+            if (check) {
+                check.addEventListener('change', (e) => {
+                    const tasks = db.getTasks();
+                    const task = tasks.find(t => t.id === taskId);
+                    if (task) {
+                        task.completed = e.target.checked;
+                        db.saveTask(task);
+                        
+                        if (task.completed) {
+                            db.addXp(5);
+                            this._playConfetti();
+                            
+                            // Visual slide out and fade
+                            row.style.opacity = '0.5';
+                            row.style.transform = 'translateX(10px)';
+                            row.style.pointerEvents = 'none';
+                            
+                            // Auto delete completed task after satisfying 1 second delay
+                            setTimeout(() => {
+                                db.deleteTask(taskId);
+                                this._refreshTasksList();
+                                this._updateSidebarProgress();
+                            }, 1000);
+                        } else {
+                            this._refreshTasksList();
+                            this._updateSidebarProgress();
+                        }
+                    }
+                });
+            }
+
+            if (deleteBtn) {
+                deleteBtn.addEventListener('click', () => {
+                    db.deleteTask(taskId);
+                    this._refreshTasksList();
+                    this._updateSidebarProgress();
+                });
+            }
+        });
+    },
+
+    _updateSidebarProgress() {
+        const shell = window.globalAppInstance;
+        if (shell) {
+            shell.updateSidebarStats();
+        }
+    },
+
+    _playConfetti() {
+        if (window.confetti) {
+            window.confetti({
+                particleCount: 50,
+                spread: 45,
+                origin: { y: 0.75, x: 0.5 },
+                colors: ['#6366f1', '#a855f7', '#10b981']
+            });
+        }
+    }
+};
+
+
 
 // =========================================================================
 // 5. BLUEPRINT VIEW COMPONENT
@@ -1705,8 +1832,8 @@ const Blueprint = {
         const blueprints = db.getBlueprints();
 
         this.container.innerHTML = `
-            <div class="animate-fade-in" style="width: 100%;">
-                <div class="glass-card" style="margin-bottom: 2rem; background: var(--grad-glow); border-color: rgba(26, 115, 232, 0.05); border-radius: var(--radius-md);">
+            <div class="animate-fade-in" style="width: 100%; box-sizing: border-box;">
+                <div class="glass-card" style="margin-bottom: 2rem; background: var(--grad-glow); border-color: rgba(26, 115, 232, 0.05); border-radius: var(--radius-md); width: 100%; box-sizing: border-box;">
                     <h3 style="font-size: 1.25rem; font-weight: 500; color: var(--primary); display: flex; align-items: center; gap: 6px;">
                         <i data-lucide="award"></i> The Atomic Blueprint Worksheet
                     </h3>
@@ -1717,8 +1844,8 @@ const Blueprint = {
 
                 <div class="view-grid">
                     <!-- Left: Identity pillars -->
-                    <div style="grid-column: span 6; display: flex; flex-direction: column; gap: 1.5rem;">
-                        <div class="glass-card" style="padding: 1.5rem; border-radius: var(--radius-md);">
+                    <div class="column-half" style="grid-column: span 6; display: flex; flex-direction: column; gap: 1.5rem; width: 100%; box-sizing: border-box;">
+                        <div class="glass-card" style="padding: 1.5rem; border-radius: var(--radius-md); width: 100%; box-sizing: border-box;">
                             <h3 class="card-title" style="margin-bottom: 0.5rem; font-weight: 500;">
                                 <i data-lucide="fingerprint" style="color: var(--primary);"></i> 1. Core Identity Pillars
                             </h3>
@@ -1744,8 +1871,8 @@ const Blueprint = {
                     </div>
 
                     <!-- Right: Habit stacking -->
-                    <div style="grid-column: span 6; display: flex; flex-direction: column; gap: 1.5rem;">
-                        <div class="glass-card" style="padding: 1.5rem; border-radius: var(--radius-md);">
+                    <div class="column-half" style="grid-column: span 6; display: flex; flex-direction: column; gap: 1.5rem; width: 100%; box-sizing: border-box;">
+                        <div class="glass-card" style="padding: 1.5rem; border-radius: var(--radius-md); width: 100%; box-sizing: border-box;">
                             <h3 class="card-title" style="margin-bottom: 0.5rem; font-weight: 500;">
                                 <i data-lucide="layers" style="color: var(--color-warning);"></i> 2. Habit Stacking Architect
                             </h3>
@@ -1780,9 +1907,9 @@ const Blueprint = {
                     </div>
 
                     <!-- Forge & Link a New Habit card (Phase 9) -->
-                    <div class="glass-card" style="grid-column: span 12; margin-top: 1.5rem; padding: 1.5rem; border-radius: var(--radius-md);">
+                    <div class="glass-card" style="grid-column: span 12; margin-top: 1.5rem; padding: 1.5rem; border-radius: var(--radius-md); width: 100%; box-sizing: border-box;">
                         <h3 class="card-title" style="margin-bottom: 0.5rem; font-weight: 500;">
-                            <i data-lucide="sparkles" style="color: var(--primary);"></i> 3. Forge & Link a New Habit
+                            <i data-lucide="sparkles" style="color: var(--primary); width: 18px; height: 18px;"></i> 3. Forge & Link a New Habit
                         </h3>
                         <p class="card-subtitle" style="margin-bottom: 1.25rem; font-size: 0.8rem;">Forge a habits routine specifically aligned with your home environment, and bind it to an Identity Pillar.</p>
 
@@ -2199,19 +2326,23 @@ const Analytics = {
             };
         });
 
-        // 3. TIME-OF-DAY ROUTINE BREAKDOWN
+        // 3. TIME-OF-DAY ROUTINE BREAKDOWN (Morning, Evening, Night)
         let morningPossible = 0;
         let morningCompleted = 0;
         let eveningPossible = 0;
         let eveningCompleted = 0;
+        let nightPossible = 0;
+        let nightCompleted = 0;
 
         Object.keys(logs).forEach(dateStr => {
             const logDate = new Date(dateStr).getTime() + (24 * 60 * 60 * 1000);
             const activeMorning = habits.filter(h => h.timeOfDay === 'morning' && h.createdAt <= logDate);
             const activeEvening = habits.filter(h => h.timeOfDay === 'evening' && h.createdAt <= logDate);
+            const activeNight = habits.filter(h => h.timeOfDay === 'night' && h.createdAt <= logDate);
             
             morningPossible += activeMorning.length;
             eveningPossible += activeEvening.length;
+            nightPossible += activeNight.length;
             
             if (logs[dateStr].completions) {
                 activeMorning.forEach(h => {
@@ -2224,11 +2355,17 @@ const Analytics = {
                         eveningCompleted++;
                     }
                 });
+                activeNight.forEach(h => {
+                    if (logs[dateStr].completions[h.id] && logs[dateStr].completions[h.id].completed) {
+                        nightCompleted++;
+                    }
+                });
             }
         });
 
         const morningRate = morningPossible > 0 ? Math.round((morningCompleted / morningPossible) * 100) : 0;
         const eveningRate = eveningPossible > 0 ? Math.round((eveningCompleted / eveningPossible) * 100) : 0;
+        const nightRate = nightPossible > 0 ? Math.round((nightCompleted / nightPossible) * 100) : 0;
 
         // 4. INDIVIDUAL HABIT PERFORMANCE MATH
         const habitStats = habits.map(h => {
@@ -2264,51 +2401,51 @@ const Analytics = {
         });
 
         this.container.innerHTML = `
-            <div class="animate-fade-in" style="width: 100%;">
+            <div class="animate-fade-in" style="width: 100%; box-sizing: border-box;">
                 <div class="view-grid" style="margin-bottom: 2rem;">
-                    <div class="glass-card" style="grid-column: span 3; display: flex; align-items: center; gap: 1rem; padding: 1rem 1.25rem; border-radius: var(--radius-md);">
-                        <div style="width: 40px; height: 40px; border-radius: 8px; background: var(--sidebar-active-bg); display: flex; align-items: center; justify-content: center; color: var(--primary); border: 1px solid var(--border-color);">
+                    <div class="glass-card column-quarter" style="grid-column: span 3; display: flex; align-items: center; gap: 1rem; padding: 1rem 1.25rem; border-radius: var(--radius-md); width: 100%; box-sizing: border-box;">
+                        <div style="width: 40px; height: 40px; border-radius: 8px; background: var(--sidebar-active-bg); display: flex; align-items: center; justify-content: center; color: var(--primary); border: 1px solid var(--border-color); flex-shrink: 0;">
                             <i data-lucide="percent" style="width: 18px; height: 18px;"></i>
                         </div>
                         <div>
-                            <span style="font-size: 0.72rem; color: var(--text-secondary); font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">Global Consistency</span>
-                            <h3 style="font-size: 1.4rem; font-weight: 700; margin-top: 1px;">${stats.consistencyScore}%</h3>
+                            <span style="font-size: 0.72rem; color: var(--text-secondary); font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; display: block; line-height: 1.2;">Global Consistency</span>
+                            <h3 style="font-size: 1.4rem; font-weight: 700; margin-top: 1px; line-height: 1.1;">${stats.consistencyScore}%</h3>
                         </div>
                     </div>
 
-                    <div class="glass-card" style="grid-column: span 3; display: flex; align-items: center; gap: 1rem; padding: 1rem 1.25rem; border-radius: var(--radius-md);">
-                        <div style="width: 40px; height: 40px; border-radius: 8px; background: rgba(30, 142, 62, 0.08); display: flex; align-items: center; justify-content: center; color: var(--color-success); border: 1px solid rgba(30, 142, 62, 0.15);">
+                    <div class="glass-card column-quarter" style="grid-column: span 3; display: flex; align-items: center; gap: 1rem; padding: 1rem 1.25rem; border-radius: var(--radius-md); width: 100%; box-sizing: border-box;">
+                        <div style="width: 40px; height: 40px; border-radius: 8px; background: rgba(30, 142, 62, 0.08); display: flex; align-items: center; justify-content: center; color: var(--color-success); border: 1px solid rgba(30, 142, 62, 0.15); flex-shrink: 0;">
                             <i data-lucide="check-circle-2" style="width: 18px; height: 18px;"></i>
                         </div>
                         <div>
-                            <span style="font-size: 0.72rem; color: var(--text-secondary); font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">Total Habits Met</span>
-                            <h3 style="font-size: 1.4rem; font-weight: 700; margin-top: 1px;">${stats.totalCheckoffs}</h3>
+                            <span style="font-size: 0.72rem; color: var(--text-secondary); font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; display: block; line-height: 1.2;">Total Habits Met</span>
+                            <h3 style="font-size: 1.4rem; font-weight: 700; margin-top: 1px; line-height: 1.1;">${stats.totalCheckoffs}</h3>
                         </div>
                     </div>
 
-                    <div class="glass-card" style="grid-column: span 3; display: flex; align-items: center; gap: 1rem; padding: 1rem 1.25rem; border-radius: var(--radius-md);">
-                        <div style="width: 40px; height: 40px; border-radius: 8px; background: rgba(227, 116, 0, 0.08); display: flex; align-items: center; justify-content: center; color: var(--color-warning); border: 1px solid rgba(227, 116, 0, 0.15);">
+                    <div class="glass-card column-quarter" style="grid-column: span 3; display: flex; align-items: center; gap: 1rem; padding: 1rem 1.25rem; border-radius: var(--radius-md); width: 100%; box-sizing: border-box;">
+                        <div style="width: 40px; height: 40px; border-radius: 8px; background: rgba(227, 116, 0, 0.08); display: flex; align-items: center; justify-content: center; color: var(--color-warning); border: 1px solid rgba(227, 116, 0, 0.15); flex-shrink: 0;">
                             <i data-lucide="flame" style="width: 18px; height: 18px;"></i>
                         </div>
                         <div>
-                            <span style="font-size: 0.72rem; color: var(--text-secondary); font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">Longest Streak</span>
-                            <h3 style="font-size: 1.4rem; font-weight: 700; margin-top: 1px;">${stats.longestStreakGlobal} <span style="font-size: 0.78rem; font-weight: 500; color: var(--text-secondary);">days</span></h3>
+                            <span style="font-size: 0.72rem; color: var(--text-secondary); font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; display: block; line-height: 1.2;">Longest Streak</span>
+                            <h3 style="font-size: 1.4rem; font-weight: 700; margin-top: 1px; line-height: 1.1;">${stats.longestStreakGlobal} <span style="font-size: 0.78rem; font-weight: 500; color: var(--text-secondary);">days</span></h3>
                         </div>
                     </div>
 
-                    <div class="glass-card" style="grid-column: span 3; display: flex; align-items: center; gap: 1rem; padding: 1rem 1.25rem; border-radius: var(--radius-md);">
-                        <div style="width: 40px; height: 40px; border-radius: 8px; background: var(--sidebar-active-bg); border: 1px solid var(--border-color); display: flex; align-items: center; justify-content: center; color: var(--primary);">
+                    <div class="glass-card column-quarter" style="grid-column: span 3; display: flex; align-items: center; gap: 1rem; padding: 1rem 1.25rem; border-radius: var(--radius-md); width: 100%; box-sizing: border-box;">
+                        <div style="width: 40px; height: 40px; border-radius: 8px; background: var(--sidebar-active-bg); border: 1px solid var(--border-color); display: flex; align-items: center; justify-content: center; color: var(--primary); flex-shrink: 0;">
                             <i data-lucide="clock" style="width: 18px; height: 18px;"></i>
                         </div>
                         <div>
-                            <span style="font-size: 0.72rem; color: var(--text-secondary); font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">2-Min Micro Wins</span>
-                            <h3 style="font-size: 1.4rem; font-weight: 700; margin-top: 1px;">${stats.twoMinRuleCount}</h3>
+                            <span style="font-size: 0.72rem; color: var(--text-secondary); font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; display: block; line-height: 1.2;">2-Min Micro Wins</span>
+                            <h3 style="font-size: 1.4rem; font-weight: 700; margin-top: 1px; line-height: 1.1;">${stats.twoMinRuleCount}</h3>
                         </div>
                     </div>
                 </div>
 
-                <div class="glass-card" style="margin-bottom: 2rem; padding: 1.25rem 1.5rem; border-radius: var(--radius-md);">
-                    <div class="card-header-flex" style="margin-bottom: 1.25rem;">
+                <div class="glass-card" style="margin-bottom: 2rem; padding: 1.25rem 1.5rem; border-radius: var(--radius-md); width: 100%; box-sizing: border-box;">
+                    <div class="card-header-flex" style="margin-bottom: 1.25rem; flex-wrap: wrap; gap: 0.75rem;">
                         <div>
                             <h3 class="card-title" style="font-weight: 500;"><i data-lucide="grid" style="color: var(--primary);"></i> 1% Better Daily Contribution Heatmap</h3>
                             <p class="card-subtitle" style="font-size: 0.8rem;">Visual intensity of habit repetitions achieved over the past 20 weeks.</p>
@@ -2332,7 +2469,7 @@ const Analytics = {
                 </div>
 
                 <div class="view-grid" style="margin-bottom: 2rem;">
-                    <div class="glass-card" style="grid-column: span 8; border-radius: var(--radius-md);">
+                    <div class="glass-card column-main" style="grid-column: span 8; border-radius: var(--radius-md); width: 100%; box-sizing: border-box;">
                         <h3 class="card-title" style="margin-bottom: 1.25rem; font-weight: 500;">
                             <i data-lucide="trending-up" style="color: var(--primary);"></i> Habits & Wellbeing Correlation
                         </h3>
@@ -2341,7 +2478,7 @@ const Analytics = {
                         </div>
                     </div>
 
-                    <div class="glass-card" style="grid-column: span 4; border-radius: var(--radius-md);">
+                    <div class="glass-card column-sidebar" style="grid-column: span 4; border-radius: var(--radius-md); width: 100%; box-sizing: border-box;">
                         <h3 class="card-title" style="margin-bottom: 1.25rem; font-weight: 500;">
                             <i data-lucide="pie-chart" style="color: var(--color-success);"></i> Category Breakdown
                         </h3>
@@ -2353,7 +2490,7 @@ const Analytics = {
 
                 <div class="view-grid" style="margin-bottom: 2rem;">
                     <!-- Sleep & Wellbeing Correlation Card -->
-                    <div class="glass-card" style="grid-column: span 6; border-radius: var(--radius-md); padding: 1.5rem; display: flex; flex-direction: column; gap: 1rem;">
+                    <div class="glass-card column-half" style="grid-column: span 6; border-radius: var(--radius-md); padding: 1.5rem; display: flex; flex-direction: column; gap: 1rem; width: 100%; box-sizing: border-box;">
                         <h3 class="card-title" style="font-weight: 500; display: flex; align-items: center; gap: 8px;">
                             <i data-lucide="moon" style="color: var(--primary);"></i> Sleep & Wellbeing Catalyst
                         </h3>
@@ -2391,7 +2528,7 @@ const Analytics = {
                     </div>
 
                     <!-- Identity Pillars & Time-of-Day Performance Card -->
-                    <div class="glass-card" style="grid-column: span 6; border-radius: var(--radius-md); padding: 1.5rem; display: flex; flex-direction: column; gap: 1rem;">
+                    <div class="glass-card column-half" style="grid-column: span 6; border-radius: var(--radius-md); padding: 1.5rem; display: flex; flex-direction: column; gap: 1rem; width: 100%; box-sizing: border-box;">
                         <h3 class="card-title" style="font-weight: 500; display: flex; align-items: center; gap: 8px;">
                             <i data-lucide="fingerprint" style="color: var(--color-warning);"></i> Identity Pillars & Timing Analysis
                         </h3>
@@ -2399,7 +2536,7 @@ const Analytics = {
 
                         <!-- Identity Pillars visual progress -->
                         <div style="display: flex; flex-direction: column; gap: 0.75rem;">
-                            <span style="font-size: 0.7rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Identity Verification Scores:</span>
+                            <span style="font-size: 0.7 flex-shrink: 0; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Identity Verification Scores:</span>
                             ${identityStats.map(id => `
                                 <div>
                                     <div style="display: flex; justify-content: space-between; font-size: 0.78rem; font-weight: 600; margin-bottom: 4px; color: var(--text-primary);">
@@ -2416,8 +2553,8 @@ const Analytics = {
                         <!-- Time of day visual progress -->
                         <div style="border-top: 1px solid var(--border-color); padding-top: 0.75rem; display: flex; flex-direction: column; gap: 0.5rem; margin-top: auto;">
                             <span style="font-size: 0.7rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Routine Performance by Home Timing:</span>
-                            <div style="display: flex; gap: 1rem; align-items: center;">
-                                <div style="flex: 1;">
+                            <div style="display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;">
+                                <div style="flex: 1; min-width: 100px;">
                                     <div style="display: flex; justify-content: space-between; font-size: 0.75rem; margin-bottom: 2px;">
                                         <span>🌅 Morning</span>
                                         <strong>${morningRate}%</strong>
@@ -2426,13 +2563,22 @@ const Analytics = {
                                         <div style="width: ${morningRate}%; height: 100%; background: #f5b942; border-radius: 4px;"></div>
                                     </div>
                                 </div>
-                                <div style="flex: 1;">
+                                <div style="flex: 1; min-width: 100px;">
                                     <div style="display: flex; justify-content: space-between; font-size: 0.75rem; margin-bottom: 2px;">
                                         <span>🌙 Evening</span>
                                         <strong>${eveningRate}%</strong>
                                     </div>
                                     <div style="width: 100%; height: 6px; background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: 4px; overflow: hidden;">
                                         <div style="width: ${eveningRate}%; height: 100%; background: #a855f7; border-radius: 4px;"></div>
+                                    </div>
+                                </div>
+                                <div style="flex: 1; min-width: 100px;">
+                                    <div style="display: flex; justify-content: space-between; font-size: 0.75rem; margin-bottom: 2px;">
+                                        <span>🌃 Night</span>
+                                        <strong>${nightRate}%</strong>
+                                    </div>
+                                    <div style="width: 100%; height: 6px; background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: 4px; overflow: hidden;">
+                                        <div style="width: ${nightRate}%; height: 100%; background: #22c55e; border-radius: 4px;"></div>
                                     </div>
                                 </div>
                             </div>
@@ -2763,11 +2909,11 @@ function doPost(e) {
 }`;
 
         this.container.innerHTML = `
-            <div class="animate-fade-in" style="width: 100%;">
+            <div class="animate-fade-in" style="width: 100%; box-sizing: border-box;">
                 <div class="view-grid">
                     <!-- Left: Profile -->
-                    <div style="grid-column: span 5; display: flex; flex-direction: column; gap: 1.5rem;">
-                        <div class="glass-card" style="border-radius: var(--radius-md);">
+                    <div class="column-sidebar" style="grid-column: span 5; display: flex; flex-direction: column; gap: 1.5rem; width: 100%; box-sizing: border-box;">
+                        <div class="glass-card" style="border-radius: var(--radius-md); width: 100%; box-sizing: border-box;">
                             <h3 class="card-title" style="margin-bottom: 1.25rem; font-weight: 500;">
                                 <i data-lucide="user" style="color: var(--primary);"></i> Personal Profile
                             </h3>
@@ -2780,7 +2926,7 @@ function doPost(e) {
                             </div>
                         </div>
 
-                        <div class="glass-card" style="border-radius: var(--radius-md);">
+                        <div class="glass-card" style="border-radius: var(--radius-md); width: 100%; box-sizing: border-box;">
                             <h3 class="card-title" style="margin-bottom: 1.25rem; font-weight: 500;">
                                 <i data-lucide="palette" style="color: var(--color-success);"></i> System Appearance
                             </h3>
@@ -2793,7 +2939,7 @@ function doPost(e) {
                             </div>
                         </div>
 
-                        <div class="glass-card" style="border-radius: var(--radius-md);">
+                        <div class="glass-card" style="border-radius: var(--radius-md); width: 100%; box-sizing: border-box;">
                             <h3 class="card-title" style="color: var(--color-danger); margin-bottom: 0.5rem; font-weight: 500;">
                                 <i data-lucide="database"></i> Local Database Storage
                             </h3>
@@ -2814,8 +2960,8 @@ function doPost(e) {
                     </div>
 
                     <!-- Right: Cloud Sync -->
-                    <div style="grid-column: span 7; display: flex; flex-direction: column; gap: 1.5rem;">
-                        <div class="glass-card" style="padding: 1.5rem 1.75rem; border-radius: var(--radius-md);">
+                    <div class="column-main" style="grid-column: span 7; display: flex; flex-direction: column; gap: 1.5rem; width: 100%; box-sizing: border-box;">
+                        <div class="glass-card" style="padding: 1.5rem 1.75rem; border-radius: var(--radius-md); width: 100%; box-sizing: border-box;">
                             <div class="card-header-flex" style="border-bottom: 1px solid var(--border-color); padding-bottom: 1rem; margin-bottom: 1.5rem;">
                                 <div>
                                     <h3 class="card-title" style="font-weight: 500;"><i data-lucide="share-2" style="color: var(--primary);"></i> Google Sheets Cloud Sync</h3>

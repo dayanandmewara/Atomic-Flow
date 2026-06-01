@@ -361,8 +361,26 @@
     grid-column: span 4;
 }
 
+.column-half {
+    grid-column: span 6;
+}
+
+.column-quarter {
+    grid-column: span 3;
+}
+
 @media (max-width: 1024px) {
-    .column-main, .column-sidebar {
+    .column-main, .column-sidebar, .column-half {
+        grid-column: span 12 !important;
+    }
+    
+    .column-quarter {
+        grid-column: span 6 !important;
+    }
+}
+
+@media (max-width: 576px) {
+    .column-quarter {
         grid-column: span 12 !important;
     }
 }
