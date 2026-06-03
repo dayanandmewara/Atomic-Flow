@@ -606,19 +606,12 @@ const Dashboard = {
                     <!-- Left: Identity-Grouped Checklist -->
                     <div class="column-main" style="display: flex; flex-direction: column; gap: 1.5rem; width: 100%; box-sizing: border-box;">
                         
-                        <!-- Date & Category filter panel (Matching details & flat pill buttons) -->
-                        <div class="glass-card" style="padding: 0.75rem 1.25rem; border-radius: var(--radius-md); width: 100%; box-sizing: border-box;">
-                            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.75rem;">
-                                <div style="display: flex; gap: 0.25rem; flex-wrap: wrap;">
-                                    <button class="btn btn-secondary filter-tab ${this.activeFilter === 'all' ? 'active-filter' : ''}" data-filter="all" style="padding: 0.35rem 0.85rem; font-size: 0.8rem; border-radius: 16px; border: none; font-weight: 500;">All Categories</button>
-                                    <button class="btn btn-secondary filter-tab ${this.activeFilter === 'health' ? 'active-filter' : ''}" data-filter="health" style="padding: 0.35rem 0.85rem; font-size: 0.8rem; border-radius: 16px; border: none; font-weight: 500;">🧼 Hygiene & Health</button>
-                                    <button class="btn btn-secondary filter-tab ${this.activeFilter === 'mind' ? 'active-filter' : ''}" data-filter="mind" style="padding: 0.35rem 0.85rem; font-size: 0.8rem; border-radius: 16px; border: none; font-weight: 500;">🧹 Room & Cleanliness</button>
-                                </div>
-                                <div style="display: flex; align-items: center; gap: 0.25rem;">
-                                    <button class="btn btn-secondary" id="btn-prev-day" style="padding: 0.3rem 0.5rem; border: none; background: transparent;"><i data-lucide="chevron-left" style="width: 16px; height: 16px;"></i></button>
-                                    <input type="date" id="dashboard-date-picker" class="form-control" value="${this.selectedDate}" style="padding: 0.3rem 0.5rem; font-size: 0.85rem; width: 130px; border-radius: 16px; height: auto; text-align: center; border: 1px solid var(--border-color);">
-                                    <button class="btn btn-secondary" id="btn-next-day" style="padding: 0.3rem 0.5rem; border: none; background: transparent;"><i data-lucide="chevron-right" style="width: 16px; height: 16px;"></i></button>
-                                </div>
+                        <!-- Date picker panel -->
+                        <div class="glass-card" style="padding: 0.5rem 1rem; border-radius: var(--radius-md); width: 100%; box-sizing: border-box;">
+                            <div style="display: flex; justify-content: center; align-items: center; gap: 0.25rem;">
+                                <button class="btn btn-secondary" id="btn-prev-day" style="padding: 0.3rem 0.5rem; border: none; background: transparent;"><i data-lucide="chevron-left" style="width: 16px; height: 16px;"></i></button>
+                                <input type="date" id="dashboard-date-picker" class="form-control" value="${this.selectedDate}" style="padding: 0.3rem 0.5rem; font-size: 0.85rem; width: 130px; border-radius: 16px; height: auto; text-align: center; border: 1px solid var(--border-color);">
+                                <button class="btn btn-secondary" id="btn-next-day" style="padding: 0.3rem 0.5rem; border: none; background: transparent;"><i data-lucide="chevron-right" style="width: 16px; height: 16px;"></i></button>
                             </div>
                         </div>
 
@@ -801,63 +794,16 @@ const Dashboard = {
     _renderGroupedHabits(habits, log, identities) {
         if (habits.length === 0) {
             return `
-                <div class="text-center" style="padding: 2.5rem; border: 1px dashed var(--border-color); border-radius: var(--radius-md); background: var(--bg-primary);">
-                    <i data-lucide="sparkles" style="width: 32px; height: 32px; color: var(--text-muted); margin-bottom: 8px;"></i>
-                    <p style="font-size: 0.85rem; color: var(--text-secondary); line-height: 1.6;">No routines scheduled. Go to the <a href="#blueprint" style="color: var(--primary); font-weight: 600; text-decoration: none;">Blueprints tab</a> to forge your first identity-driven habits!</p>
+                <div class="text-center" style="padding: 2rem; border: 1px dashed var(--border-color); border-radius: var(--radius-md); background: var(--bg-primary);">
+                    <i data-lucide="sparkles" style="width: 28px; height: 28px; color: var(--text-muted); margin-bottom: 6px;"></i>
+                    <p style="font-size: 0.82rem; color: var(--text-secondary); line-height: 1.5;">No routines scheduled. Go to the <a href="#blueprint" style="color: var(--primary); font-weight: 600; text-decoration: none;">Blueprints tab</a> to forge your first habits!</p>
                 </div>
             `;
         }
 
-        const grouped = {};
-        identities.forEach(idObj => {
-            grouped[idObj.title] = [];
-        });
-        const general = [];
-
-        habits.forEach(h => {
-            if (h.identity && grouped[h.identity] !== undefined) {
-                grouped[h.identity].push(h);
-            } else {
-                general.push(h);
-            }
-        });
-
-        let html = '';
-
-        // Render each active identity group
-        identities.forEach(idObj => {
-            const groupHabits = grouped[idObj.title];
-            if (groupHabits.length > 0) {
-                html += `
-                    <div style="background: var(--bg-primary); padding: 1rem 1.25rem; border-radius: var(--radius-md); border: 1px solid var(--border-color); border-left: 4px solid var(--primary); margin-bottom: 0.75rem;">
-                        <h4 style="font-size: 0.85rem; font-weight: 700; color: var(--text-primary); margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
-                            <i data-lucide="fingerprint" style="width: 14px; height: 14px; color: var(--primary);"></i> Identity Pillar: "${idObj.title}"
-                        </h4>
-                        <p style="font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 0.75rem; font-style: italic;">Daily Proof: ${idObj.proof}</p>
-                        <div style="display: flex; flex-direction: column; gap: 0.5rem;">
-                            ${this._renderHabitListMarkup(groupHabits, log)}
-                        </div>
-                    </div>
-                `;
-            }
-        });
-
-        // Render general habits group
-        if (general.length > 0) {
-            html += `
-                <div style="background: var(--bg-primary); padding: 1rem 1.25rem; border-radius: var(--radius-md); border: 1px solid var(--border-color); border-left: 4px solid var(--color-info); margin-bottom: 0.75rem;">
-                    <h4 style="font-size: 0.85rem; font-weight: 700; color: var(--text-primary); margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
-                        <i data-lucide="layers" style="width: 14px; height: 14px; color: var(--color-info);"></i> 🌱 Core Daily Routines
-                    </h4>
-                    <p style="font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 0.75rem; font-style: italic;">Supporting home habits</p>
-                    <div style="display: flex; flex-direction: column; gap: 0.5rem;">
-                        ${this._renderHabitListMarkup(general, log)}
-                    </div>
-                </div>
-            `;
-        }
-
-        return html;
+        return `<div style="display: flex; flex-direction: column; gap: 6px;">
+            ${this._renderHabitListMarkup(habits, log)}
+        </div>`;
     },
 
     _renderHabitListMarkup(groupHabits, log) {
@@ -867,72 +813,60 @@ const Dashboard = {
             const isTwoMinuteSelected = completion ? completion.isTwoMinute : !!this.activeTwoMinuteHabits[habit.id];
             const streak = AtomicManager.calculateStreak(habit.id);
             const isHot = streak.current >= 5;
-            
-            // Render beautiful clean habit cards with time of day tags
-            const timeTag = habit.timeOfDay === 'morning' 
-                ? '🌅 Morning' 
-                : (habit.timeOfDay === 'night' ? '🌃 Night' : '🌙 Evening');
+            const cat = habit.category || 'other';
             
             return `
-                <div class="habit-card ${isCompleted ? 'completed' : ''} animate-fade-in" data-id="${habit.id}" style="padding: 0.85rem 1rem; border-radius: var(--radius-md); position: relative;">
-                    <label class="checkbox-wrapper" style="width: 28px; height: 28px; margin-bottom: 0;">
+                <div class="habit-card habit-color-${cat} ${isCompleted ? 'completed' : ''} animate-fade-in" data-id="${habit.id}" style="position: relative;">
+                    <label class="checkbox-wrapper" style="margin-bottom: 0;">
                         <input type="checkbox" class="habit-check" ${isCompleted ? 'checked' : ''}>
-                        <span class="checkmark" style="width: 28px; height: 28px;"><i data-lucide="check" style="font-size: 0.95rem;"></i></span>
+                        <span class="checkmark"><i data-lucide="check" style="width: 12px; height: 12px;"></i></span>
                     </label>
 
-                    <div class="habit-details">
-                        <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
-                            <span class="habit-name" style="font-size: 0.95rem; font-weight: 500;">${habit.name}</span>
-                            <span class="habit-category cat-${habit.category}" style="font-size: 0.65rem; padding: 1px 6px;">${habit.category}</span>
-                            <span style="font-size: 0.65rem; padding: 1px 6px; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-secondary);">${timeTag}</span>
-                        </div>
-                        <p class="habit-desc" style="font-size: 0.78rem; color: var(--text-secondary); margin-top: 2px;">
-                            ${isTwoMinuteSelected 
-                                ? `<strong style="color: var(--primary);">⚡ 2-Min Version Active:</strong> ${habit.twoMinuteVersion || 'Quick start.'}`
-                                : (habit.stackTrigger ? `After I <strong>${habit.stackTrigger}</strong>, I will complete this.` : 'Repetitions build identity.')
-                            }
-                        </p>
+                    <div class="habit-details" style="display: flex; align-items: center; gap: 6px; min-width: 0;">
+                        <span class="habit-color-dot dot-${cat}"></span>
+                        <span class="habit-name" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${habit.name}</span>
                     </div>
 
-                    <div style="display: flex; align-items: center; gap: 0.75rem; flex-shrink: 0;">
-                        ${habit.twoMinuteVersion && !isCompleted ? `
-                            <button class="btn btn-secondary btn-twomin-trigger ${isTwoMinuteSelected ? 'active' : ''}" style="font-size: 0.7rem; padding: 2px 8px; border-radius: 12px; background: transparent; border-color: var(--border-color); color: var(--text-secondary);" title="Low energy alternative">
-                                ⚡ ${isTwoMinuteSelected ? 'Normal' : '2-Min'}
-                            </button>
+                    <div style="display: flex; align-items: center; gap: 4px; flex-shrink: 0; margin-left: auto;">
+                        ${streak.current > 0 ? `
+                            <div class="streak-badge ${isHot ? 'hot' : ''}" title="${streak.current} day streak">
+                                <i data-lucide="flame" style="width: 10px; height: 10px;"></i>
+                                <span>${streak.current}</span>
+                            </div>
                         ` : ''}
-
-                        <div class="streak-badge ${isHot ? 'hot' : ''}" style="font-size: 0.75rem; padding: 0.2rem 0.4rem;" title="${streak.current} day streak">
-                            <i data-lucide="flame" style="width: 12px; height: 12px;"></i>
-                            <span>${streak.current}</span>
-                        </div>
                         
-                        <button class="btn btn-secondary btn-drawer-toggle" style="padding: 2px 4px; border: none; background: transparent;">
-                            <i data-lucide="chevron-down" style="width: 16px; height: 16px;"></i>
+                        <button class="btn btn-secondary btn-drawer-toggle" style="padding: 1px 2px; border: none; background: transparent; color: var(--text-muted);">
+                            <i data-lucide="chevron-down" style="width: 14px; height: 14px;"></i>
                         </button>
                     </div>
 
                     <div class="habit-drawer hidden">
                         <div style="grid-column: span 1;">
                             <div class="drawer-section-title">1st Law: Make it Obvious</div>
-                            <div class="drawer-bubble" style="margin-bottom: 0.5rem; font-size: 0.8rem; padding: 0.5rem;">
-                                <strong>Cue Design:</strong> ${habit.cue || 'Not set.'}
+                            <div class="drawer-bubble" style="margin-bottom: 0.5rem; font-size: 0.78rem; padding: 0.45rem;">
+                                <strong>Cue:</strong> ${habit.cue || 'Not set.'}
                             </div>
-                            <div class="drawer-bubble" style="font-size: 0.8rem; padding: 0.5rem;">
-                                <strong>Habit Stack:</strong> After I <em>${habit.stackTrigger || '[X]'}</em>, I will <em>${habit.name}</em>.
+                            <div class="drawer-bubble" style="font-size: 0.78rem; padding: 0.45rem;">
+                                <strong>Stack:</strong> After I <em>${habit.stackTrigger || '[X]'}</em>, I will <em>${habit.name}</em>.
                             </div>
                         </div>
                         <div style="grid-column: span 1;">
                             <div class="drawer-section-title">4th Law: Make it Satisfying</div>
-                            <div class="drawer-bubble" style="margin-bottom: 0.5rem; font-size: 0.8rem; padding: 0.5rem;">
-                                <strong>Instant Reward:</strong> ${habit.reward || 'Not set.'}
+                            <div class="drawer-bubble" style="margin-bottom: 0.5rem; font-size: 0.78rem; padding: 0.45rem;">
+                                <strong>Reward:</strong> ${habit.reward || 'Not set.'}
                             </div>
-                            <div class="drawer-bubble" style="border-color: rgba(184, 240, 100, 0.2); background: rgba(184, 240, 100, 0.01); font-size: 0.8rem; padding: 0.5rem;">
-                                <strong>Core Identity:</strong> Proving I am <em>"${habit.identity || 'better today'}"</em>.
+                            <div class="drawer-bubble" style="border-color: rgba(184, 240, 100, 0.2); background: rgba(184, 240, 100, 0.01); font-size: 0.78rem; padding: 0.45rem;">
+                                <strong>Identity:</strong> Proving I am <em>"${habit.identity || 'better today'}"</em>.
                             </div>
                         </div>
                         
-                        <div style="grid-column: span 2; display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 0.5rem;">
-                            <button class="btn btn-secondary btn-delete-habit" style="padding: 0.25rem 0.5rem; font-size: 0.7rem; border-color: rgba(239,68,68,0.15); color: #ef4444;"><i data-lucide="trash-2" style="width: 10px; height: 10px;"></i> Delete Habit</button>
+                        <div style="grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: center; margin-top: 0.25rem; flex-wrap: wrap; gap: 0.5rem;">
+                            ${habit.twoMinuteVersion ? `
+                                <button class="btn btn-secondary btn-twomin-trigger ${isTwoMinuteSelected ? 'active' : ''}" style="font-size: 0.7rem; padding: 2px 10px; border-radius: 12px;" title="Low energy alternative">
+                                    ⚡ ${isTwoMinuteSelected ? 'Normal Mode' : '2-Min Version'}
+                                </button>
+                            ` : '<span></span>'}
+                            <button class="btn btn-secondary btn-delete-habit" style="padding: 0.2rem 0.5rem; font-size: 0.68rem; border-color: rgba(239,68,68,0.15); color: #ef4444;"><i data-lucide="trash-2" style="width: 10px; height: 10px;"></i> Delete</button>
                         </div>
                     </div>
                 </div>
@@ -1030,15 +964,6 @@ const Dashboard = {
 
 
     _setupListeners() {
-        const tabs = this.container.querySelectorAll('.filter-tab');
-        tabs.forEach(tab => {
-            tab.addEventListener('click', () => {
-                tabs.forEach(t => t.classList.remove('active-filter'));
-                tab.classList.add('active-filter');
-                this.activeFilter = tab.getAttribute('data-filter');
-                this.updateView();
-            });
-        });
 
         const timeBtns = this.container.querySelectorAll('.time-filter-btn');
         timeBtns.forEach(btn => {
@@ -1833,188 +1758,127 @@ const Blueprint = {
 
         this.container.innerHTML = `
             <div class="animate-fade-in" style="width: 100%; box-sizing: border-box;">
-                <div class="glass-card" style="margin-bottom: 2rem; background: var(--grad-glow); border-color: rgba(26, 115, 232, 0.05); border-radius: var(--radius-md); width: 100%; box-sizing: border-box;">
-                    <h3 style="font-size: 1.25rem; font-weight: 500; color: var(--primary); display: flex; align-items: center; gap: 6px;">
-                        <i data-lucide="award"></i> The Atomic Blueprint Worksheet
+                <div class="glass-card" style="margin-bottom: 1.5rem; background: var(--grad-glow); border-color: rgba(26, 115, 232, 0.05); border-radius: var(--radius-md); width: 100%; box-sizing: border-box;">
+                    <h3 style="font-size: 1.15rem; font-weight: 500; color: var(--primary); display: flex; align-items: center; gap: 6px;">
+                        <i data-lucide="award"></i> Atomic Blueprint
                     </h3>
-                    <p style="font-size: 0.9rem; color: var(--text-secondary); line-height: 1.6; margin-top: 0.5rem;">
-                        Real, lasting change doesn't come from focusing on goals. It comes from adopting your ultimate *Identity*. Use these worksheets to build a robust system of stacks and proofs.
+                    <p style="font-size: 0.82rem; color: var(--text-secondary); line-height: 1.5; margin-top: 0.4rem;">
+                        Define who you want to become, then forge habits that prove that identity every day.
                     </p>
                 </div>
 
                 <div class="view-grid">
-                    <!-- Left: Identity pillars -->
+                    <!-- Left: Identity Pillars -->
                     <div class="column-half" style="grid-column: span 6; display: flex; flex-direction: column; gap: 1.5rem; width: 100%; box-sizing: border-box;">
-                        <div class="glass-card" style="padding: 1.5rem; border-radius: var(--radius-md); width: 100%; box-sizing: border-box;">
-                            <h3 class="card-title" style="margin-bottom: 0.5rem; font-weight: 500;">
-                                <i data-lucide="fingerprint" style="color: var(--primary);"></i> 1. Core Identity Pillars
+                        <div class="glass-card" style="padding: 1.25rem; border-radius: var(--radius-md); width: 100%; box-sizing: border-box;">
+                            <h3 class="card-title" style="margin-bottom: 0.4rem; font-weight: 500;">
+                                <i data-lucide="fingerprint" style="color: var(--primary);"></i> Identity Pillars
                             </h3>
-                            <p class="card-subtitle" style="margin-bottom: 1.5rem; font-size: 0.8rem;">Define your ultimate self and build daily proof systems.</p>
+                            <p class="card-subtitle" style="margin-bottom: 1.25rem; font-size: 0.78rem;">Define who you want to become and the daily proof.</p>
 
-                            <form id="identity-form" style="display: flex; flex-direction: column; gap: 1rem; background: var(--bg-primary); padding: 1rem; border-radius: var(--radius-md); border: 1px solid var(--border-color); margin-bottom: 1.5rem;">
-                                <div class="form-group">
-                                    <label style="font-size: 0.8rem;">I want to become the type of person who is a...</label>
-                                    <input type="text" id="identity-title-input" class="form-control" style="font-size: 0.85rem; padding: 0.5rem 0.75rem;" placeholder="e.g. Prolific writer, healthy athlete" required>
+                            <form id="identity-form" style="display: flex; flex-direction: column; gap: 0.75rem; background: var(--bg-primary); padding: 0.85rem; border-radius: var(--radius-md); border: 1px solid var(--border-color); margin-bottom: 1.25rem;">
+                                <div class="form-group" style="margin-bottom: 0;">
+                                    <label style="font-size: 0.78rem;">I want to become...</label>
+                                    <input type="text" id="identity-title-input" class="form-control" style="font-size: 0.82rem; padding: 0.45rem 0.65rem;" placeholder="e.g. Prolific writer, healthy athlete" required>
                                 </div>
-                                <div class="form-group">
-                                    <label style="font-size: 0.8rem;">Daily action that proves this identity:</label>
-                                    <input type="text" id="identity-action-input" class="form-control" style="font-size: 0.85rem; padding: 0.5rem 0.75rem;" placeholder="e.g. Writing 100 words, exercising for 10 min" required>
+                                <div class="form-group" style="margin-bottom: 0;">
+                                    <label style="font-size: 0.78rem;">Daily proof action:</label>
+                                    <input type="text" id="identity-action-input" class="form-control" style="font-size: 0.82rem; padding: 0.45rem 0.65rem;" placeholder="e.g. Writing 100 words daily" required>
                                 </div>
-                                <button type="submit" class="btn btn-primary" style="align-self: flex-end; padding: 0.45rem 1.1rem; font-size: 0.8rem; border-radius: 12px;"><i data-lucide="plus"></i> Add Pillar</button>
+                                <button type="submit" class="btn btn-primary" style="align-self: flex-end; padding: 0.4rem 1rem; font-size: 0.78rem; border-radius: 12px;"><i data-lucide="plus"></i> Add Pillar</button>
                             </form>
 
-                            <h4 style="font-size: 0.9rem; font-weight: 700; margin-bottom: 0.75rem; color: var(--text-secondary);">Your Identity Pillars</h4>
-                            <div id="identities-container" style="display: flex; flex-direction: column; gap: 0.75rem;">
+                            <h4 style="font-size: 0.85rem; font-weight: 700; margin-bottom: 0.6rem; color: var(--text-secondary);">Your Pillars</h4>
+                            <div id="identities-container" style="display: flex; flex-direction: column; gap: 0.6rem;">
                                 ${this._renderIdentitiesList(blueprints.identities)}
                             </div>
                         </div>
                     </div>
 
-                    <!-- Right: Habit stacking -->
+                    <!-- Right: Forge & Link a New Habit -->
                     <div class="column-half" style="grid-column: span 6; display: flex; flex-direction: column; gap: 1.5rem; width: 100%; box-sizing: border-box;">
-                        <div class="glass-card" style="padding: 1.5rem; border-radius: var(--radius-md); width: 100%; box-sizing: border-box;">
-                            <h3 class="card-title" style="margin-bottom: 0.5rem; font-weight: 500;">
-                                <i data-lucide="layers" style="color: var(--color-warning);"></i> 2. Habit Stacking Architect
+                        <div class="glass-card" style="padding: 1.25rem; border-radius: var(--radius-md); width: 100%; box-sizing: border-box;">
+                            <h3 class="card-title" style="margin-bottom: 0.4rem; font-weight: 500;">
+                                <i data-lucide="sparkles" style="color: var(--primary); width: 18px; height: 18px;"></i> Forge a New Habit
                             </h3>
-                            <p class="card-subtitle" style="margin-bottom: 1.5rem; font-size: 0.8rem;">Link a new habit to an existing, fully established trigger cue.</p>
+                            <p class="card-subtitle" style="margin-bottom: 1rem; font-size: 0.78rem;">Create a habit linked to an identity pillar with all 4 Atomic Laws.</p>
 
-                            <form id="stack-form" style="display: flex; flex-direction: column; gap: 1rem; background: var(--bg-primary); padding: 1rem; border-radius: var(--radius-md); border: 1px solid var(--border-color); margin-bottom: 1.5rem;">
-                                <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-                                    <span style="font-size: 0.85rem; font-weight: 600;">After I</span>
-                                    <input type="text" id="stack-trigger" class="form-control" style="flex: 1; min-width: 120px; padding: 0.4rem 0.6rem; font-size: 0.82rem;" placeholder="pour my morning coffee" required>
-                                    <span style="font-size: 0.85rem; font-weight: 600;">, I will...</span>
-                                </div>
-                                <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
-                                    <input type="text" id="stack-new-habit" class="form-control" style="flex: 1; min-width: 120px; padding: 0.4rem 0.6rem; font-size: 0.82rem;" placeholder="meditate for 5 minutes" required>
-                                    <span style="font-size: 0.85rem; font-weight: 600;">in/at</span>
-                                    <input type="text" id="stack-location" class="form-control" style="flex: 0.6; min-width: 90px; padding: 0.4rem 0.6rem; font-size: 0.82rem;" placeholder="living room chair" required>
-                                </div>
-                                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.5rem; flex-wrap: wrap; gap: 8px;">
-                                    <label class="checkbox-wrapper" style="width: auto; height: auto; display: flex; align-items: center; gap: 8px; font-size: 0.78rem; font-weight: 600; color: var(--text-secondary);">
-                                        <input type="checkbox" id="stack-auto-add-dashboard" checked>
-                                        <span class="checkmark" style="width: 18px; height: 18px; border-radius: 4px; border-width: 1px;"><i data-lucide="check" style="width: 10px; height: 10px;"></i></span>
-                                        <span>Add as active habit to dashboard</span>
+                            <form id="new-habit-form" style="display: flex; flex-direction: column; gap: 1rem; background: var(--bg-primary); padding: 1rem; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
+                                <div class="form-group" style="margin-bottom: 0;">
+                                    <label style="font-size: 0.78rem; font-weight: 600; display: flex; align-items: center; gap: 4px;">
+                                        <i data-lucide="activity" style="width: 13px; height: 13px; color: var(--primary);"></i> Habit Name
                                     </label>
-                                    <button type="submit" class="btn btn-primary" style="padding: 0.45rem 1.1rem; font-size: 0.8rem; border-radius: 12px;"><i data-lucide="plus"></i> Add Stack</button>
+                                    <input type="text" id="new-habit-name" class="form-control" style="font-size: 0.82rem; padding: 0.45rem 0.65rem;" placeholder="e.g. Read 5 pages" required>
                                 </div>
-                            </form>
 
-                            <h4 style="font-size: 0.9rem; font-weight: 700; margin-bottom: 0.75rem; color: var(--text-secondary);">Your Configured Stacks</h4>
-                            <div id="stacks-container" style="display: flex; flex-direction: column; gap: 0.75rem;">
-                                ${this._renderStacksList(blueprints.stacks)}
-                            </div>
-                        </div>
-                    </div>
+                                <div class="form-group" style="margin-bottom: 0;">
+                                    <label style="font-size: 0.78rem; font-weight: 600; display: flex; align-items: center; gap: 4px;">
+                                        <i data-lucide="fingerprint" style="width: 13px; height: 13px; color: var(--primary);"></i> Identity Pillar
+                                    </label>
+                                    <select id="new-habit-identity" class="form-control" style="font-size: 0.82rem; padding: 0.45rem 0.65rem;" required>
+                                        ${blueprints.identities.map(id => `<option value="${id.title}">${id.title}</option>`).join('') || '<option value="">(Create an Identity Pillar first!)</option>'}
+                                    </select>
+                                </div>
 
-                    <!-- Forge & Link a New Habit card (Phase 9) -->
-                    <div class="glass-card" style="grid-column: span 12; margin-top: 1.5rem; padding: 1.5rem; border-radius: var(--radius-md); width: 100%; box-sizing: border-box;">
-                        <h3 class="card-title" style="margin-bottom: 0.5rem; font-weight: 500;">
-                            <i data-lucide="sparkles" style="color: var(--primary); width: 18px; height: 18px;"></i> 3. Forge & Link a New Habit
-                        </h3>
-                        <p class="card-subtitle" style="margin-bottom: 1.25rem; font-size: 0.8rem;">Forge a habits routine specifically aligned with your home environment, and bind it to an Identity Pillar.</p>
-
-                        <!-- Visual Preset Section -->
-                        <div style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: var(--radius-md); padding: 1rem; margin-bottom: 1.5rem;">
-                            <span style="font-size: 0.78rem; font-weight: 600; color: var(--text-secondary); display: block; margin-bottom: 0.75rem;">⚡ Quick Hygiene & Room Tidiness Presets:</span>
-                            <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-                                <button class="btn btn-secondary btn-preset" type="button" data-preset="shower" style="font-size: 0.78rem; padding: 0.4rem 0.8rem; border-radius: 12px; display: inline-flex; align-items: center; gap: 6px;">
-                                    🧼 Morning Shower & Teeth
-                                </button>
-                                <button class="btn btn-secondary btn-preset" type="button" data-preset="kitchen" style="font-size: 0.78rem; padding: 0.4rem 0.8rem; border-radius: 12px; display: inline-flex; align-items: center; gap: 6px;">
-                                    🧹 2-Minute Kitchen Tidy
-                                </button>
-                                <button class="btn btn-secondary btn-preset" type="button" data-preset="bed" style="font-size: 0.78rem; padding: 0.4rem 0.8rem; border-radius: 12px; display: inline-flex; align-items: center; gap: 6px;">
-                                    🛏️ Bedroom Bed Setup
-                                </button>
-                                <button class="btn btn-secondary btn-preset" type="button" data-preset="declutter" style="font-size: 0.78rem; padding: 0.4rem 0.8rem; border-radius: 12px; display: inline-flex; align-items: center; gap: 6px;">
-                                    📦 Declutter & Arrange Room
-                                </button>
-                            </div>
-                        </div>
-
-                        <!-- Habit Forging Form -->
-                        <form id="new-habit-form" style="display: flex; flex-direction: column; gap: 1.25rem; background: var(--bg-primary); padding: 1.25rem; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
-                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1.25rem;">
-                                <!-- Column 1: Core Habit Identity & Time -->
-                                <div style="display: flex; flex-direction: column; gap: 1rem;">
-                                    <div class="form-group">
-                                        <label style="font-size: 0.8rem; font-weight: 600; display: flex; align-items: center; gap: 4px;">
-                                            <i data-lucide="activity" style="width: 14px; height: 14px; color: var(--primary);"></i> Habit Name
+                                <div style="display: flex; gap: 0.75rem;">
+                                    <div class="form-group" style="flex: 1; margin-bottom: 0;">
+                                        <label style="font-size: 0.78rem; font-weight: 600; display: flex; align-items: center; gap: 4px;">
+                                            <i data-lucide="palette" style="width: 13px; height: 13px; color: var(--primary);"></i> Color
                                         </label>
-                                        <input type="text" id="new-habit-name" class="form-control" style="font-size: 0.85rem; padding: 0.5rem 0.75rem;" placeholder="e.g. Read 5 pages, Drink water" required>
+                                        <div id="color-picker-row" style="display: flex; gap: 8px; padding: 6px 0; flex-wrap: wrap;">
+                                            <button type="button" class="color-pick-btn active" data-color="health" style="width: 28px; height: 28px; border-radius: 50%; border: 2px solid var(--primary); background: #b8f064; cursor: pointer; transition: all 0.15s;" title="Health"></button>
+                                            <button type="button" class="color-pick-btn" data-color="mind" style="width: 28px; height: 28px; border-radius: 50%; border: 2px solid transparent; background: #64b0f0; cursor: pointer; transition: all 0.15s;" title="Mind"></button>
+                                            <button type="button" class="color-pick-btn" data-color="career" style="width: 28px; height: 28px; border-radius: 50%; border: 2px solid transparent; background: #a78bfa; cursor: pointer; transition: all 0.15s;" title="Career"></button>
+                                            <button type="button" class="color-pick-btn" data-color="other" style="width: 28px; height: 28px; border-radius: 50%; border: 2px solid transparent; background: #f5b942; cursor: pointer; transition: all 0.15s;" title="General"></button>
+                                        </div>
+                                        <input type="hidden" id="new-habit-category" value="health">
                                     </div>
 
-                                    <div class="form-group">
-                                        <label style="font-size: 0.8rem; font-weight: 600; display: flex; align-items: center; gap: 4px;">
-                                            <i data-lucide="fingerprint" style="width: 14px; height: 14px; color: var(--primary);"></i> Link to Identity Pillar
+                                    <div class="form-group" style="flex: 1; margin-bottom: 0;">
+                                        <label style="font-size: 0.78rem; font-weight: 600; display: flex; align-items: center; gap: 4px;">
+                                            <i data-lucide="clock" style="width: 13px; height: 13px; color: var(--primary);"></i> Timing
                                         </label>
-                                        <select id="new-habit-identity" class="form-control" style="font-size: 0.85rem; padding: 0.5rem 0.75rem;" required>
-                                            ${blueprints.identities.map(id => `<option value="${id.title}">${id.title}</option>`).join('') || '<option value="">(Create an Identity Pillar first!)</option>'}
+                                        <select id="new-habit-time" class="form-control" style="font-size: 0.82rem; padding: 0.45rem 0.65rem;">
+                                            <option value="morning">🌅 Morning</option>
+                                            <option value="evening">🌙 Evening</option>
+                                            <option value="night">🌃 Night</option>
                                         </select>
                                     </div>
-
-                                    <div style="display: flex; gap: 1rem;">
-                                        <div class="form-group" style="flex: 1;">
-                                            <label style="font-size: 0.8rem; font-weight: 600; display: flex; align-items: center; gap: 4px;">
-                                                <i data-lucide="tag" style="width: 14px; height: 14px; color: var(--primary);"></i> Category
-                                            </label>
-                                            <select id="new-habit-category" class="form-control" style="font-size: 0.85rem; padding: 0.5rem 0.75rem;">
-                                                <option value="health">🧼 Hygiene & Health</option>
-                                                <option value="mind">🧹 Room & Cleanliness</option>
-                                                <option value="career">💼 Career & Learning</option>
-                                                <option value="other">🌱 General</option>
-                                            </select>
-                                        </div>
-
-                                        <div class="form-group" style="flex: 1;">
-                                            <label style="font-size: 0.8rem; font-weight: 600; display: flex; align-items: center; gap: 4px;">
-                                                <i data-lucide="clock" style="width: 14px; height: 14px; color: var(--primary);"></i> Home Timing
-                                            </label>
-                                            <select id="new-habit-time" class="form-control" style="font-size: 0.85rem; padding: 0.5rem 0.75rem;">
-                                                <option value="morning">🌅 Morning (Before Office)</option>
-                                                <option value="evening">🌙 Evening (After Office)</option>
-                                                <option value="night">🌃 Night (Before Bed)</option>
-                                            </select>
-                                        </div>
-                                    </div>
                                 </div>
 
-                                <!-- Column 2: Obvious Cue, Habit Stack, & 2-Minute Ease -->
-                                <div style="display: flex; flex-direction: column; gap: 1rem;">
-                                    <div class="form-group">
-                                        <label style="font-size: 0.8rem; font-weight: 600; display: flex; align-items: center; gap: 4px;">
-                                            <i data-lucide="layers" style="width: 14px; height: 14px; color: var(--color-warning);"></i> Habit Stack Trigger (1st Law)
-                                        </label>
-                                        <input type="text" id="new-habit-trigger" class="form-control" style="font-size: 0.85rem; padding: 0.5rem 0.75rem;" placeholder="e.g. After I step out of bed in the morning" required>
-                                    </div>
-
-                                    <div class="form-group">
-                                        <label style="font-size: 0.8rem; font-weight: 600; display: flex; align-items: center; gap: 4px;">
-                                            <i data-lucide="eye" style="width: 14px; height: 14px; color: var(--color-info);"></i> Obvious Cue (1st Law)
-                                        </label>
-                                        <input type="text" id="new-habit-cue" class="form-control" style="font-size: 0.85rem; padding: 0.5rem 0.75rem;" placeholder="e.g. Clean towel prepared on counter" required>
-                                    </div>
-
-                                    <div class="form-group">
-                                        <label style="font-size: 0.8rem; font-weight: 600; display: flex; align-items: center; gap: 4px;">
-                                            <i data-lucide="zap" style="width: 14px; height: 14px; color: var(--color-success);"></i> 2-Minute Version (3rd Law - Make it Easy)
-                                        </label>
-                                        <input type="text" id="new-habit-twomin" class="form-control" style="font-size: 0.85rem; padding: 0.5rem 0.75rem;" placeholder="e.g. Brush teeth and wash face for 30s" required>
-                                    </div>
-
-                                    <div class="form-group">
-                                        <label style="font-size: 0.8rem; font-weight: 600; display: flex; align-items: center; gap: 4px;">
-                                            <i data-lucide="gift" style="width: 14px; height: 14px; color: var(--primary);"></i> Immediate Reward (4th Law)
-                                        </label>
-                                        <input type="text" id="new-habit-reward" class="form-control" style="font-size: 0.85rem; padding: 0.5rem 0.75rem;" placeholder="e.g. Feeling completely fresh and clean" required>
-                                    </div>
+                                <div class="form-group" style="margin-bottom: 0;">
+                                    <label style="font-size: 0.78rem; font-weight: 600; display: flex; align-items: center; gap: 4px;">
+                                        <i data-lucide="layers" style="width: 13px; height: 13px; color: var(--color-warning);"></i> Habit Stack Trigger
+                                    </label>
+                                    <input type="text" id="new-habit-trigger" class="form-control" style="font-size: 0.82rem; padding: 0.45rem 0.65rem;" placeholder="After I step out of bed..." required>
                                 </div>
-                            </div>
 
-                            <button type="submit" class="btn btn-primary" style="align-self: flex-end; padding: 0.6rem 1.5rem; font-size: 0.85rem; border-radius: 12px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px;">
-                                <i data-lucide="plus-circle" style="width: 16px; height: 16px;"></i> Forge & Activate Habit
-                            </button>
-                        </form>
+                                <div class="form-group" style="margin-bottom: 0;">
+                                    <label style="font-size: 0.78rem; font-weight: 600; display: flex; align-items: center; gap: 4px;">
+                                        <i data-lucide="eye" style="width: 13px; height: 13px; color: var(--color-info);"></i> Obvious Cue
+                                    </label>
+                                    <input type="text" id="new-habit-cue" class="form-control" style="font-size: 0.82rem; padding: 0.45rem 0.65rem;" placeholder="Clean towel on counter" required>
+                                </div>
+
+                                <div class="form-group" style="margin-bottom: 0;">
+                                    <label style="font-size: 0.78rem; font-weight: 600; display: flex; align-items: center; gap: 4px;">
+                                        <i data-lucide="zap" style="width: 13px; height: 13px; color: var(--color-success);"></i> 2-Minute Version
+                                    </label>
+                                    <input type="text" id="new-habit-twomin" class="form-control" style="font-size: 0.82rem; padding: 0.45rem 0.65rem;" placeholder="Brush teeth for 30s" required>
+                                </div>
+
+                                <div class="form-group" style="margin-bottom: 0;">
+                                    <label style="font-size: 0.78rem; font-weight: 600; display: flex; align-items: center; gap: 4px;">
+                                        <i data-lucide="gift" style="width: 13px; height: 13px; color: var(--primary);"></i> Immediate Reward
+                                    </label>
+                                    <input type="text" id="new-habit-reward" class="form-control" style="font-size: 0.82rem; padding: 0.45rem 0.65rem;" placeholder="Feeling fresh and clean" required>
+                                </div>
+
+                                <button type="submit" class="btn btn-primary" style="align-self: flex-end; padding: 0.5rem 1.25rem; font-size: 0.82rem; border-radius: 12px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px;">
+                                    <i data-lucide="plus-circle" style="width: 15px; height: 15px;"></i> Forge Habit
+                                </button>
+                            </form>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -2046,29 +1910,8 @@ const Blueprint = {
         `).join('');
     },
 
-    _renderStacksList(stacks) {
-        if (!stacks || stacks.length === 0) {
-            return `
-                <div style="text-align: center; padding: 2rem; color: var(--text-secondary); border: 1px dashed var(--border-color); border-radius: var(--radius-md); font-size: 0.85rem;">
-                    Construct your first Habit Stack trigger!
-                </div>
-            `;
-        }
-        return stacks.map((stack, idx) => `
-            <div class="animate-fade-in" style="background: var(--bg-primary); border: 1px solid var(--border-color); border-left: 3px solid var(--color-warning); padding: 0.75rem 1rem; border-radius: var(--radius-md); display: flex; justify-content: space-between; align-items: center; gap: 1rem;">
-                <div style="display: flex; flex-direction: column; gap: 4px; font-size: 0.85rem;">
-                    <div style="line-height: 1.4;">
-                        After I <strong style="color: var(--primary);">${stack.trigger}</strong>, 
-                        I will <strong style="color: var(--color-success);">${stack.habit}</strong> 
-                        at <strong style="color: var(--color-warning);">${stack.location}</strong>.
-                    </div>
-                </div>
-                <button class="btn-delete-stack" data-index="${idx}" style="background: transparent; border: none; cursor: pointer; color: var(--text-muted); flex-shrink: 0;"><i data-lucide="trash-2" style="width: 16px; height: 16px;"></i></button>
-            </div>
-        `).join('');
-    },
-
     _setupListeners() {
+        // Identity Pillar form
         const idForm = this.container.querySelector('#identity-form');
         idForm.addEventListener('submit', (e) => {
             e.preventDefault();
@@ -2098,51 +1941,22 @@ const Blueprint = {
             });
         });
 
-        const stackForm = this.container.querySelector('#stack-form');
-        stackForm.addEventListener('submit', (e) => {
-            e.preventDefault();
-            const blueprints = db.getBlueprints();
-            
-            const trigger = this.container.querySelector('#stack-trigger').value;
-            const habitName = this.container.querySelector('#stack-new-habit').value;
-            const location = this.container.querySelector('#stack-location').value;
-            const autoAdd = this.container.querySelector('#stack-auto-add-dashboard').checked;
-
-            const newStack = { trigger, habit: habitName, location };
-            blueprints.stacks = blueprints.stacks || [];
-            blueprints.stacks.push(newStack);
-            db.saveBlueprints(blueprints);
-
-            if (autoAdd) {
-                const createdHabit = {
-                    name: habitName,
-                    category: 'mind',
-                    timeOfDay: 'afternoon',
-                    identity: blueprints.identities.length > 0 ? blueprints.identities[0].title : '',
-                    stackTrigger: trigger,
-                    cue: `Located in: ${location}`,
-                    twoMinuteVersion: `Start doing ${habitName.split(' ')[0]} for 1 minute.`,
-                    reward: 'Fulfill identity check.'
-                };
-                db.saveHabit(createdHabit);
-            }
-
-            stackForm.reset();
-            this.updateView();
-        });
-
-        const deleteStackBtns = this.container.querySelectorAll('.btn-delete-stack');
-        deleteStackBtns.forEach(btn => {
+        // Color Picker
+        const colorBtns = this.container.querySelectorAll('.color-pick-btn');
+        const categoryInput = this.container.querySelector('#new-habit-category');
+        colorBtns.forEach(btn => {
             btn.addEventListener('click', () => {
-                const idx = parseInt(btn.getAttribute('data-index'));
-                const blueprints = db.getBlueprints();
-                blueprints.stacks.splice(idx, 1);
-                db.saveBlueprints(blueprints);
-                this.updateView();
+                colorBtns.forEach(b => {
+                    b.style.borderColor = 'transparent';
+                    b.classList.remove('active');
+                });
+                btn.style.borderColor = 'var(--primary)';
+                btn.classList.add('active');
+                categoryInput.value = btn.getAttribute('data-color');
             });
         });
 
-        // Forge Habit Form Submit (Phase 9)
+        // Forge Habit Form
         const newForm = this.container.querySelector('#new-habit-form');
         if (newForm) {
             newForm.addEventListener('submit', (e) => {
@@ -2159,78 +1973,15 @@ const Blueprint = {
                 };
                 db.saveHabit(createdHabit);
                 newForm.reset();
+                // Reset color picker to first option
+                colorBtns.forEach(b => { b.style.borderColor = 'transparent'; b.classList.remove('active'); });
+                if (colorBtns[0]) { colorBtns[0].style.borderColor = 'var(--primary)'; colorBtns[0].classList.add('active'); }
+                categoryInput.value = 'health';
                 this.updateView();
                 
                 if (window.globalAppInstance) {
                     window.globalAppInstance.updateSidebarStats();
                 }
-            });
-
-            // Preset Buttons wiring
-            const presetButtons = this.container.querySelectorAll('.btn-preset');
-            presetButtons.forEach(btn => {
-                btn.addEventListener('click', () => {
-                    const presetType = btn.getAttribute('data-preset');
-                    const blueprints = db.getBlueprints();
-                    let name = "", category = "health", time = "morning", identityIndex = 0, twomin = "", trigger = "", cue = "", reward = "";
-
-                    if (presetType === 'shower') {
-                        name = "Morning Shower & Teeth";
-                        category = "health";
-                        time = "morning";
-                        twomin = "Brush teeth and wash face for 30 seconds";
-                        trigger = "After I step out of bed in the morning";
-                        cue = "Clean towel and soap prepared on bathroom counter";
-                        reward = "Enjoy the refreshing, clean smell of soap";
-                        const idx = blueprints.identities.findIndex(id => id.title.toLowerCase().includes('clean') || id.title.toLowerCase().includes('hygiene') || id.title.toLowerCase().includes('health'));
-                        if (idx !== -1) identityIndex = idx;
-                    } else if (presetType === 'kitchen') {
-                        name = "Kitchen Tidy";
-                        category = "mind";
-                        time = "evening";
-                        twomin = "Place 3 dishes into the dishwasher";
-                        trigger = "After I finish eating dinner";
-                        cue = "Kitchen sink empty of large obstacles";
-                        reward = "Walking into a clean kitchen tomorrow morning";
-                        const idx = blueprints.identities.findIndex(id => id.title.toLowerCase().includes('organized') || id.title.toLowerCase().includes('mindful') || id.title.toLowerCase().includes('neat') || id.title.toLowerCase().includes('system') || id.title.toLowerCase().includes('cleanliness'));
-                        if (idx !== -1) identityIndex = idx;
-                    } else if (presetType === 'bed') {
-                        name = "Bedroom Bed Setup";
-                        category = "mind";
-                        time = "morning";
-                        twomin = "Pull up sheets and arrange pillows";
-                        trigger = "After I stand up from bed";
-                        cue = "Pillows positioned at bed head";
-                        reward = "Enjoying an organized bedroom space";
-                        const idx = blueprints.identities.findIndex(id => id.title.toLowerCase().includes('organized') || id.title.toLowerCase().includes('mindful') || id.title.toLowerCase().includes('neat') || id.title.toLowerCase().includes('system') || id.title.toLowerCase().includes('cleanliness'));
-                        if (idx !== -1) identityIndex = idx;
-                    } else if (presetType === 'declutter') {
-                        name = "Declutter & Arrange Room";
-                        category = "mind";
-                        time = "evening";
-                        twomin = "Put away 3 items in bedroom";
-                        trigger = "After I arrive home from the office";
-                        cue = "Bedroom floor clear of stray clothes";
-                        reward = "Calm and peaceful bedroom environment before sleeping";
-                        const idx = blueprints.identities.findIndex(id => id.title.toLowerCase().includes('organized') || id.title.toLowerCase().includes('mindful') || id.title.toLowerCase().includes('neat') || id.title.toLowerCase().includes('system') || id.title.toLowerCase().includes('cleanliness'));
-                        if (idx !== -1) identityIndex = idx;
-                    }
-
-                    this.container.querySelector('#new-habit-name').value = name;
-                    this.container.querySelector('#new-habit-category').value = category;
-                    this.container.querySelector('#new-habit-time').value = time;
-                    this.container.querySelector('#new-habit-twomin').value = twomin;
-                    this.container.querySelector('#new-habit-trigger').value = trigger;
-                    this.container.querySelector('#new-habit-cue').value = cue;
-                    this.container.querySelector('#new-habit-reward').value = reward;
-
-                    if (blueprints.identities.length > 0) {
-                        const sel = this.container.querySelector('#new-habit-identity');
-                        if (sel && sel.options[identityIndex]) {
-                            sel.selectedIndex = identityIndex;
-                        }
-                    }
-                });
             });
         }
     }
@@ -2845,210 +2596,197 @@ const Settings = {
 
     updateView() {
         const settings = db.getSettings();
-        const appsScriptCode = `function doGet(e) {
-  var action = e.parameter.action;
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  if (action === 'test') {
-    return ContentService.createTextOutput(JSON.stringify({ status: 'ok' })).setMimeType(ContentService.MimeType.JSON);
-  }
-  if (action === 'pull') {
-    var sheet = ss.getSheetByName("RAW_DATA");
-    if (!sheet) return ContentService.createTextOutput(JSON.stringify({})).setMimeType(ContentService.MimeType.JSON);
-    var jsonStr = sheet.getRange("A1").getValue();
-    return ContentService.createTextOutput(jsonStr).setMimeType(ContentService.MimeType.JSON);
-  }
+        const lastSyncTime = settings.lastSyncTime ? new Date(settings.lastSyncTime).toLocaleString() : 'Never';
+        const habitCount = db.getHabits().length;
+        const logCount = Object.keys(db.logs).length;
+
+        this.container.innerHTML = `
+            <div class="animate-fade-in" style="width: 100%; box-sizing: border-box; max-width: 600px; margin: 0 auto;">
+
+                <!-- Profile & Appearance — compact inline -->
+                <div class="glass-card" style="padding: 1rem 1.25rem; border-radius: var(--radius-md); margin-bottom: 0.75rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap;">
+                        <div style="display: flex; align-items: center; gap: 0.5rem; flex: 1; min-width: 180px;">
+                            <i data-lucide="user" style="width: 16px; height: 16px; color: var(--primary); flex-shrink: 0;"></i>
+                            <input type="text" id="username-input" class="form-control" value="${settings.userName}" style="flex: 1; border-radius: 8px; font-size: 0.85rem; padding: 0.4rem 0.65rem;" placeholder="Display name">
+                            <button class="btn btn-primary" id="btn-save-username" style="padding: 0.4rem 0.85rem; border-radius: 8px; font-size: 0.78rem; white-space: nowrap;">Save</button>
+                        </div>
+                        <div class="theme-switch-btn" style="flex-shrink: 0;">
+                            <button class="theme-btn ${settings.theme === 'light' ? 'active' : ''}" id="btn-theme-light" title="Light"><i data-lucide="sun"></i></button>
+                            <button class="theme-btn ${settings.theme === 'dark' ? 'active' : ''}" id="btn-theme-dark" title="Dark"><i data-lucide="moon"></i></button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Google Sheets Cloud Sync -->
+                <div class="glass-card" style="padding: 1rem 1.25rem; border-radius: var(--radius-md); margin-bottom: 0.75rem;">
+                    <h3 class="card-title" style="font-weight: 500; margin-bottom: 0.75rem; font-size: 1rem;">
+                        <i data-lucide="share-2" style="color: var(--primary); width: 18px; height: 18px;"></i> Google Sheets Sync
+                    </h3>
+
+                    <div style="display: flex; flex-direction: column; gap: 0.75rem; background: var(--bg-primary); padding: 0.85rem; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label style="font-size: 0.75rem; font-weight: 600;">Web App URL</label>
+                            <input type="text" id="sheets-url-input" class="form-control" style="border-radius: 8px; font-size: 0.82rem; padding: 0.4rem 0.65rem;" value="${settings.sheetsUrl || ''}" placeholder="https://script.google.com/macros/s/.../exec">
+                        </div>
+
+                        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+                            <label class="checkbox-wrapper" style="width: auto; height: auto; display: flex; align-items: center; gap: 6px; font-size: 0.78rem; font-weight: 600; color: var(--text-secondary);">
+                                <input type="checkbox" id="auto-sync-checkbox" ${settings.autoSync ? 'checked' : ''}>
+                                <span class="checkmark" style="width: 16px; height: 16px; border-radius: 4px; border-width: 1px;"><i data-lucide="check" style="width: 9px; height: 9px;"></i></span>
+                                <span>Auto-sync on actions</span>
+                            </label>
+                            <span id="sync-conn-badge" class="badge" style="background: rgba(217, 48, 37, 0.1); color: #d93025; border: 1px solid rgba(217, 48, 37, 0.15); padding: 2px 8px; border-radius: 12px; font-size: 0.68rem; font-weight: 700;">
+                                Disconnected
+                            </span>
+                        </div>
+
+                        <div style="font-size: 0.7rem; color: var(--text-muted); display: flex; align-items: center; gap: 4px;">
+                            <i data-lucide="clock" style="width: 11px; height: 11px;"></i>
+                            Last synced: <span id="last-sync-time">${lastSyncTime}</span>
+                        </div>
+
+                        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                            <button class="btn btn-secondary" id="btn-test-sync" style="font-size: 0.78rem; padding: 0.4rem 0.75rem; border-radius: 10px; flex: 1; min-width: 80px;"><i data-lucide="activity" style="width: 13px; height: 13px;"></i> Test</button>
+                            <button class="btn btn-secondary" id="btn-pull-sync" style="font-size: 0.78rem; padding: 0.4rem 0.75rem; border-radius: 10px; flex: 1; min-width: 80px;"><i data-lucide="arrow-down-to-line" style="width: 13px; height: 13px;"></i> Pull</button>
+                            <button class="btn btn-primary" id="btn-push-sync" style="font-size: 0.78rem; padding: 0.4rem 0.75rem; border-radius: 10px; flex: 1; min-width: 80px;"><i data-lucide="arrow-up-from-line" style="width: 13px; height: 13px;"></i> Push</button>
+                        </div>
+
+                        <div style="font-size: 0.68rem; color: var(--text-muted); background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); border-radius: 6px; padding: 0.5rem 0.65rem; line-height: 1.5;">
+                            <strong>Pull</strong> = Download cloud → replace local &nbsp;|&nbsp; <strong>Push</strong> = Upload local → overwrite cloud<br>
+                            Local: <strong>${habitCount}</strong> habits, <strong>${logCount}</strong> daily logs.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Collapsible: Setup Guide -->
+                <div class="glass-card" style="padding: 0; border-radius: var(--radius-md); margin-bottom: 0.75rem; overflow: hidden;">
+                    <button id="toggle-setup-guide" style="width: 100%; background: transparent; border: none; padding: 0.75rem 1.25rem; cursor: pointer; display: flex; justify-content: space-between; align-items: center; color: var(--text-primary);">
+                        <span style="font-size: 0.85rem; font-weight: 600; display: flex; align-items: center; gap: 6px;">
+                            <i data-lucide="help-circle" style="width: 15px; height: 15px; color: var(--primary);"></i> Setup Guide (first time only)
+                        </span>
+                        <i data-lucide="chevron-down" id="setup-guide-chevron" style="width: 16px; height: 16px; color: var(--text-muted); transition: transform 0.2s;"></i>
+                    </button>
+                    <div id="setup-guide-content" style="display: none; padding: 0 1.25rem 1rem;">
+                        <div class="setup-guide" style="margin-top: 0;">
+                            <div class="step-card" style="border-radius: 8px;">
+                                <div class="step-num">1</div>
+                                <div class="step-body">
+                                    <h5>Create a Google Spreadsheet</h5>
+                                    <p>Go to Google Drive, create a blank spreadsheet named <strong>"My Habits Log"</strong>.</p>
+                                </div>
+                            </div>
+                            <div class="step-card" style="border-radius: 8px;">
+                                <div class="step-num">2</div>
+                                <div class="step-body">
+                                    <h5>Open Apps Script Editor</h5>
+                                    <p><strong>Extensions</strong> &rarr; <strong>Apps Script</strong>. Clear existing code.</p>
+                                </div>
+                            </div>
+                            <div class="step-card" style="flex-direction: column; gap: 0.5rem; border-radius: 8px;">
+                                <div style="display: flex; gap: 1rem;">
+                                    <div class="step-num">3</div>
+                                    <div class="step-body">
+                                        <h5>Paste Sync Code</h5>
+                                        <p>Copy the code below and paste it into the editor.</p>
+                                    </div>
+                                </div>
+                                <div class="code-snippet-box">
+                                    <button class="btn-copy" id="btn-copy-code"><i data-lucide="copy" style="width: 12px; height: 12px;"></i> Copy</button>
+                                    <pre style="max-height: 200px; overflow-y: auto;"><code id="script-code-content">// AtomicFlow Google Apps Script V5
+function doGet(e) {
+  var output = ContentService.createTextOutput();
+  output.setMimeType(ContentService.MimeType.JSON);
+  try {
+    var action = e.parameter.action;
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var dbSheet = ss.getSheetByName("Database");
+    if (!dbSheet) { var sheets = ss.getSheets(); dbSheet = sheets.length > 0 ? sheets[0] : ss.insertSheet("Database"); }
+    if (action === 'test') { output.setContent(JSON.stringify({ status: 'ok' })); return output; }
+    if (action === 'pull') {
+      var rawData = dbSheet.getRange(1, 1).getValue();
+      var data = {};
+      try { data = rawData ? JSON.parse(rawData) : { habits: [], logs: {}, blueprints: { identities: [], stacks: [] }, tasks: [] }; } catch(err) { data = { habits: [], logs: {}, blueprints: { identities: [], stacks: [] }, tasks: [] }; }
+      output.setContent(JSON.stringify(data)); return output;
+    }
+    output.setContent(JSON.stringify({ error: 'Invalid action' })); return output;
+  } catch (err) { output.setContent(JSON.stringify({ error: err.toString(), status: 'error' })); return output; }
 }
 
 function doPost(e) {
-  var data = JSON.parse(e.postData.contents);
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var rawSheet = ss.getSheetByName("RAW_DATA") || ss.insertSheet("RAW_DATA");
-  rawSheet.getRange("A1").setValue(JSON.stringify(data));
-  
-  var habitSheet = ss.getSheetByName("VIEW_HABITS") || ss.insertSheet("VIEW_HABITS");
-  habitSheet.clear();
-  habitSheet.appendRow(["Habit ID", "Name", "Category", "Cue", "Two-Minute Version", "Trigger Stack"]);
-  if (data.habits) {
-    data.habits.forEach(function(h) {
-      if (h.active) {
-        habitSheet.appendRow([h.id, h.name, h.category, h.cue || '', h.twoMinuteVersion || '', h.stackTrigger || '']);
-      }
-    });
-  }
-  
-  var logsSheet = ss.getSheetByName("VIEW_DAILY_LOGS") || ss.insertSheet("VIEW_DAILY_LOGS");
-  logsSheet.clear();
-  logsSheet.appendRow(["Date", "Mood", "Energy", "Wins", "Tomorrow Pivot", "Journal Notes", "Bedtime", "Wake Up", "Sleep Hours"]);
-  if (data.logs) {
-    Object.keys(data.logs).sort().forEach(function(dateKey) {
-      var log = data.logs[dateKey];
-      var sleepHrs = 0;
-      if (log.sleepBedtime && log.sleepWakeup) {
-        // Sleep Duration calculation
-        var bed = log.sleepBedtime.split(':').map(Number);
-        var wake = log.sleepWakeup.split(':').map(Number);
-        var bedD = new Date(2020, 0, 1, bed[0], bed[1]);
-        var wakeD = new Date(2020, 0, 1, wake[0], wake[1]);
-        if (wakeD <= bedD) wakeD.setDate(wakeD.getDate() + 1);
-        sleepHrs = Math.round(((wakeD - bedD) / (1000 * 60 * 60)) * 10) / 10;
-      }
-      logsSheet.appendRow([
-        dateKey, 
-        log.mood || 0, 
-        log.energy || 0, 
-        (log.wins || []).join(" | "), 
-        log.improvement || '', 
-        log.journalNotes || '',
-        log.sleepBedtime || '',
-        log.sleepWakeup || '',
-        sleepHrs
-      ]);
-    });
-  }
-  return ContentService.createTextOutput(JSON.stringify({ status: 'success' })).setMimeType(ContentService.MimeType.JSON);
-}`;
-
-        this.container.innerHTML = `
-            <div class="animate-fade-in" style="width: 100%; box-sizing: border-box;">
-                <div class="view-grid">
-                    <!-- Left: Profile -->
-                    <div class="column-sidebar" style="grid-column: span 5; display: flex; flex-direction: column; gap: 1.5rem; width: 100%; box-sizing: border-box;">
-                        <div class="glass-card" style="border-radius: var(--radius-md); width: 100%; box-sizing: border-box;">
-                            <h3 class="card-title" style="margin-bottom: 1.25rem; font-weight: 500;">
-                                <i data-lucide="user" style="color: var(--primary);"></i> Personal Profile
-                            </h3>
-                            <div class="form-group">
-                                <label>Your Display Name</label>
-                                <div style="display: flex; gap: 0.5rem;">
-                                    <input type="text" id="username-input" class="form-control" value="${settings.userName}" style="flex: 1; border-radius: 8px;">
-                                    <button class="btn btn-primary" id="btn-save-username" style="padding: 0.75rem 1.25rem; border-radius: 8px;">Save</button>
+  var output = ContentService.createTextOutput();
+  output.setMimeType(ContentService.MimeType.JSON);
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var postData = JSON.parse(e.postData.contents);
+    if (postData.action === 'push') {
+      var d = { habits: postData.habits||[], logs: postData.logs||{}, blueprints: postData.blueprints||{identities:[],stacks:[]}, tasks: postData.tasks||[], updatedAt: Date.now() };
+      var dbSheet = ss.getSheetByName("Database") || ss.insertSheet("Database");
+      dbSheet.getRange(1,1).setValue(JSON.stringify(d));
+      var hS = ss.getSheetByName("Habits") || ss.insertSheet("Habits"); hS.clear();
+      hS.appendRow(["ID","Name","Category","Time","Identity","Cue","Reward","2-Min","Stack Trigger","Active"]);
+      hS.getRange(1,1,1,10).setFontWeight("bold").setBackground("#e8f0fe");
+      if(d.habits.length>0){var hD=d.habits.map(function(h){return[h.id||"",h.name||"",h.category||"",h.timeOfDay||"",h.identity||"",h.cue||"",h.reward||"",h.twoMinuteVersion||"",h.stackTrigger||"",h.active!==false?"Yes":"No"]});hS.getRange(2,1,hD.length,10).setValues(hD)}
+      var tS = ss.getSheetByName("Tasks") || ss.insertSheet("Tasks"); tS.clear();
+      tS.appendRow(["ID","Text","Done","Active","Date"]);tS.getRange(1,1,1,5).setFontWeight("bold").setBackground("#e8f0fe");
+      if(d.tasks.length>0){var tD=d.tasks.map(function(t){return[t.id||"",t.text||"",t.completed?"Yes":"No",t.active!==false?"Yes":"No",t.date||""]});tS.getRange(2,1,tD.length,5).setValues(tD)}
+      var jS = ss.getSheetByName("Journal Logs") || ss.insertSheet("Journal Logs"); jS.clear();
+      jS.appendRow(["Date","Mood","Energy","Bedtime","Wakeup","Sleep Quality","Wins","Improvement","Notes"]);
+      jS.getRange(1,1,1,9).setFontWeight("bold").setBackground("#e8f0fe");
+      var lD=Object.keys(d.logs).sort().reverse();
+      if(lD.length>0){var jD=lD.map(function(dt){var l=d.logs[dt];return[dt,l.mood||"",l.energy||"",l.sleepBedtime||"",l.sleepWakeup||"",l.sleepQuality||"",l.wins?l.wins.join(", "):"",l.improvement||"",l.journalNotes||""]});jS.getRange(2,1,jD.length,9).setValues(jD)}
+      output.setContent(JSON.stringify({ status: 'success' })); return output;
+    }
+    output.setContent(JSON.stringify({ error: 'Invalid action' })); return output;
+  } catch (err) { output.setContent(JSON.stringify({ error: err.toString(), status: 'error' })); return output; }
+}</code></pre>
                                 </div>
                             </div>
-                        </div>
-
-                        <div class="glass-card" style="border-radius: var(--radius-md); width: 100%; box-sizing: border-box;">
-                            <h3 class="card-title" style="margin-bottom: 1.25rem; font-weight: 500;">
-                                <i data-lucide="palette" style="color: var(--color-success);"></i> System Appearance
-                            </h3>
-                            <div style="display: flex; justify-content: space-between; align-items: center;">
-                                <span style="font-size: 0.9rem; color: var(--text-secondary); font-weight: 500;">Theme Toggle</span>
-                                <div class="theme-switch-btn">
-                                    <button class="theme-btn ${settings.theme === 'light' ? 'active' : ''}" id="btn-theme-light" title="Light Theme"><i data-lucide="sun"></i></button>
-                                    <button class="theme-btn ${settings.theme === 'dark' ? 'active' : ''}" id="btn-theme-dark" title="Dark Theme"><i data-lucide="moon"></i></button>
+                            <div class="step-card" style="border-radius: 8px;">
+                                <div class="step-num">4</div>
+                                <div class="step-body">
+                                    <h5>Deploy Web App</h5>
+                                    <p><strong>Deploy</strong> &rarr; <strong>New deployment</strong> &rarr; Web app. Execute as: "Me", access: "Anyone".</p>
                                 </div>
                             </div>
-                        </div>
-
-                        <div class="glass-card" style="border-radius: var(--radius-md); width: 100%; box-sizing: border-box;">
-                            <h3 class="card-title" style="color: var(--color-danger); margin-bottom: 0.5rem; font-weight: 500;">
-                                <i data-lucide="database"></i> Local Database Storage
-                            </h3>
-                            <p class="card-subtitle" style="margin-bottom: 1.25rem;">Directly manage your local browser files.</p>
-                            
-                            <div style="display: flex; flex-direction: column; gap: 0.75rem;">
-                                <button class="btn btn-secondary" id="btn-export-db" style="justify-content: flex-start; width: 100%; border-radius: 8px;"><i data-lucide="download"></i> Export Database (JSON)</button>
-                                
-                                <div style="display: flex; flex-direction: column; gap: 0.5rem; background: var(--bg-primary); padding: 0.75rem; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
-                                    <label style="font-size: 0.75rem; font-weight: 600; color: var(--text-secondary);">Import Database String</label>
-                                    <textarea id="import-json-string" class="form-control" style="font-size: 0.75rem; font-family: monospace; min-height: 50px; border-radius: 8px;" placeholder="Paste exported JSON string here..."></textarea>
-                                    <button class="btn btn-primary" id="btn-import-db" style="font-size: 0.75rem; padding: 0.4rem 1rem; align-self: flex-end; border-radius: 8px;"><i data-lucide="upload-cloud"></i> Import JSON</button>
-                                </div>
-
-                                <button class="btn btn-danger" id="btn-reset-db" style="justify-content: flex-start; width: 100%; border-radius: 8px;"><i data-lucide="refresh-cw"></i> Reset Database</button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Right: Cloud Sync -->
-                    <div class="column-main" style="grid-column: span 7; display: flex; flex-direction: column; gap: 1.5rem; width: 100%; box-sizing: border-box;">
-                        <div class="glass-card" style="padding: 1.5rem 1.75rem; border-radius: var(--radius-md); width: 100%; box-sizing: border-box;">
-                            <div class="card-header-flex" style="border-bottom: 1px solid var(--border-color); padding-bottom: 1rem; margin-bottom: 1.5rem;">
-                                <div>
-                                    <h3 class="card-title" style="font-weight: 500;"><i data-lucide="share-2" style="color: var(--primary);"></i> Google Sheets Cloud Sync</h3>
-                                    <p class="card-subtitle">Secure personal sync where you own 100% of the spreadsheet data.</p>
-                                </div>
-                            </div>
-
-                            <div style="display: flex; flex-direction: column; gap: 1.25rem; background: var(--bg-primary); padding: 1.25rem; border-radius: var(--radius-md); border: 1px solid var(--border-color); margin-bottom: 1.5rem;">
-                                <div class="form-group" style="margin-bottom: 0;">
-                                    <label>Google Apps Script Web App URL</label>
-                                    <input type="text" id="sheets-url-input" class="form-control" style="border-radius: 8px;" value="${settings.sheetsUrl || ''}" placeholder="https://script.google.com/macros/s/.../exec">
-                                </div>
-
-                                <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--border-color); padding-top: 1rem;">
-                                    <label class="checkbox-wrapper" style="width: auto; height: auto; display: flex; align-items: center; gap: 8px; font-size: 0.85rem; font-weight: 600; color: var(--text-secondary);">
-                                        <input type="checkbox" id="auto-sync-checkbox" ${settings.autoSync ? 'checked' : ''}>
-                                        <span class="checkmark" style="width: 18px; height: 18px; border-radius: 4px; border-width: 1px;"><i data-lucide="check" style="width: 10px; height: 10px;"></i></span>
-                                        <span>Auto-sync logs on checklist actions</span>
-                                    </label>
-                                    <span id="sync-conn-badge" class="badge" style="background: rgba(217, 48, 37, 0.1); color: #d93025; border: 1px solid rgba(217, 48, 37, 0.15); padding: 3px 8px; border-radius: 12px; font-size: 0.7rem; font-weight: 700;">
-                                        Disconnected
-                                    </span>
-                                </div>
-
-                                <div style="display: flex; gap: 0.75rem; justify-content: flex-end; flex-wrap: wrap;">
-                                    <button class="btn btn-secondary" id="btn-test-sync" style="font-size: 0.85rem; padding: 0.5rem 1rem; border-radius: 12px;"><i data-lucide="activity"></i> Test Link</button>
-                                    <button class="btn btn-secondary" id="btn-pull-sync" style="font-size: 0.85rem; padding: 0.5rem 1rem; border-radius: 12px;"><i data-lucide="arrow-down-to-line"></i> Pull Cloud</button>
-                                    <button class="btn btn-primary" id="btn-push-sync" style="font-size: 0.85rem; padding: 0.5rem 1rem; border-radius: 12px;"><i data-lucide="arrow-up-from-line"></i> Push Cloud</button>
-                                </div>
-                            </div>
-
-                            <h4 style="font-size: 1rem; font-weight: 700; margin-bottom: 0.75rem; display: flex; align-items: center; gap: 6px;">
-                                <i data-lucide="help-circle" style="color: var(--primary);"></i> Setup Walkthrough (5 Minutes)
-                            </h4>
-                            
-                            <div class="setup-guide">
-                                <div class="step-card" style="border-radius: 8px;">
-                                    <div class="step-num">1</div>
-                                    <div class="step-body">
-                                        <h5>Create a Google Spreadsheet</h5>
-                                        <p>Go to Google Drive, create a blank Google Spreadsheet named <strong>"My Habits Log"</strong>.</p>
-                                    </div>
-                                </div>
-                                <div class="step-card" style="border-radius: 8px;">
-                                    <div class="step-num">2</div>
-                                    <div class="step-body">
-                                        <h5>Open Apps Script Editor</h5>
-                                        <p>In your spreadsheet menu, click <strong>Extensions</strong> &rarr; <strong>Apps Script</strong>. Clear existing code.</p>
-                                    </div>
-                                </div>
-                                <div class="step-card" style="flex-direction: column; gap: 0.5rem; border-radius: 8px;">
-                                    <div style="display: flex; gap: 1rem;">
-                                        <div class="step-num">3</div>
-                                        <div class="step-body">
-                                            <h5>Paste Sync Code</h5>
-                                            <p>Copy the code below and paste it directly into the editor.</p>
-                                        </div>
-                                    </div>
-                                    <div class="code-snippet-box">
-                                        <button class="btn-copy" id="btn-copy-code"><i data-lucide="copy" style="width: 12px; height: 12px;"></i> Copy Code</button>
-                                        <pre><code id="script-code-content">${appsScriptCode}</code></pre>
-                                    </div>
-                                </div>
-                                <div class="step-card" style="border-radius: 8px;">
-                                    <div class="step-num">4</div>
-                                    <div class="step-body">
-                                        <h5>Deploy Web App</h5>
-                                        <p>Click <strong>Deploy</strong> &rarr; <strong>New deployment</strong>. Choose type: <strong>Web app</strong>. Execute as: "Me", access: "Anyone". Click Deploy.</p>
-                                    </div>
-                                </div>
-                                <div class="step-card" style="border-radius: 8px;">
-                                    <div class="step-num">5</div>
-                                    <div class="step-body">
-                                        <h5>Connect</h5>
-                                        <p>Authorize script permissions, copy the generated Web App URL, paste it in the box above, and click <strong>Test Link</strong>!</p>
-                                    </div>
+                            <div class="step-card" style="border-radius: 8px;">
+                                <div class="step-num">5</div>
+                                <div class="step-body">
+                                    <h5>Connect</h5>
+                                    <p>Authorize, copy the Web App URL, paste above, click <strong>Test</strong>.</p>
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
+
+                <!-- Collapsible: Advanced (Export/Import) -->
+                <div class="glass-card" style="padding: 0; border-radius: var(--radius-md); margin-bottom: 0.75rem; overflow: hidden;">
+                    <button id="toggle-advanced" style="width: 100%; background: transparent; border: none; padding: 0.75rem 1.25rem; cursor: pointer; display: flex; justify-content: space-between; align-items: center; color: var(--text-primary);">
+                        <span style="font-size: 0.85rem; font-weight: 600; display: flex; align-items: center; gap: 6px;">
+                            <i data-lucide="database" style="width: 15px; height: 15px; color: var(--text-muted);"></i> Advanced (Export / Import)
+                        </span>
+                        <i data-lucide="chevron-down" id="advanced-chevron" style="width: 16px; height: 16px; color: var(--text-muted); transition: transform 0.2s;"></i>
+                    </button>
+                    <div id="advanced-content" style="display: none; padding: 0 1.25rem 1rem;">
+                        <div style="display: flex; flex-direction: column; gap: 0.6rem;">
+                            <button class="btn btn-secondary" id="btn-export-db" style="justify-content: flex-start; width: 100%; border-radius: 8px; font-size: 0.82rem; padding: 0.45rem 0.85rem;"><i data-lucide="download" style="width: 14px; height: 14px;"></i> Export Database (JSON)</button>
+                            
+                            <div style="display: flex; flex-direction: column; gap: 0.4rem; background: var(--bg-primary); padding: 0.65rem; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
+                                <label style="font-size: 0.72rem; font-weight: 600; color: var(--text-secondary);">Import Database String</label>
+                                <textarea id="import-json-string" class="form-control" style="font-size: 0.72rem; font-family: monospace; min-height: 40px; border-radius: 8px;" placeholder="Paste exported JSON here..."></textarea>
+                                <button class="btn btn-primary" id="btn-import-db" style="font-size: 0.72rem; padding: 0.35rem 0.85rem; align-self: flex-end; border-radius: 8px;"><i data-lucide="upload-cloud" style="width: 12px; height: 12px;"></i> Import</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
             </div>
 
-            <!-- Generic Toast feedback -->
-            <div id="settings-toast" class="glass-card animate-slide-up" style="position: fixed; bottom: 2rem; right: 2rem; background: var(--grad-primary); color: #ffffff; padding: 0.75rem 1.5rem; border-radius: var(--radius-sm); box-shadow: var(--glass-shadow); z-index: 10000; border: none; display: none;">
-                <div style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
-                    <i data-lucide="check" style="width: 20px; height: 20px;"></i>
+            <!-- Toast -->
+            <div id="settings-toast" class="glass-card animate-slide-up" style="position: fixed; bottom: 2rem; right: 2rem; background: var(--grad-primary); color: #ffffff; padding: 0.65rem 1.25rem; border-radius: var(--radius-sm); box-shadow: var(--glass-shadow); z-index: 10000; border: none; display: none;">
+                <div style="display: flex; align-items: center; gap: 6px; font-weight: 600; font-size: 0.85rem;">
+                    <i data-lucide="check" style="width: 16px; height: 16px;"></i>
                     <span id="settings-toast-msg">Settings saved!</span>
                 </div>
             </div>
@@ -3060,6 +2798,7 @@ function doPost(e) {
     },
 
     _setupListeners() {
+        // Save username
         this.container.querySelector('#btn-save-username').addEventListener('click', () => {
             const name = this.container.querySelector('#username-input').value.trim();
             if (name) {
@@ -3076,21 +2815,21 @@ function doPost(e) {
             }
         });
 
-        this.container.querySelector('#btn-theme-light').addEventListener('click', () => {
-            this._toggleTheme('light');
-        });
-        
-        this.container.querySelector('#btn-theme-dark').addEventListener('click', () => {
-            this._toggleTheme('dark');
-        });
+        // Theme
+        this.container.querySelector('#btn-theme-light').addEventListener('click', () => this._toggleTheme('light'));
+        this.container.querySelector('#btn-theme-dark').addEventListener('click', () => this._toggleTheme('dark'));
 
+        // Copy script code
         this.container.querySelector('#btn-copy-code').addEventListener('click', () => {
             const code = this.container.querySelector('#script-code-content').innerText;
-            navigator.clipboard.writeText(code).then(() => {
-                this._showToast("Code copied!");
-            });
+            navigator.clipboard.writeText(code).then(() => this._showToast("Code copied!"));
         });
 
+        // Collapsible toggles
+        this._setupCollapsible('toggle-setup-guide', 'setup-guide-content', 'setup-guide-chevron');
+        this._setupCollapsible('toggle-advanced', 'advanced-content', 'advanced-chevron');
+
+        // Export DB
         this.container.querySelector('#btn-export-db').addEventListener('click', () => {
             const fullDb = { habits: db.habits, logs: db.logs, blueprints: db.blueprints, settings: db.settings };
             const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(fullDb, null, 2));
@@ -3102,21 +2841,20 @@ function doPost(e) {
             dlAnchor.remove();
         });
 
+        // Import DB
         this.container.querySelector('#btn-import-db').addEventListener('click', () => {
             const jsonText = this.container.querySelector('#import-json-string').value.trim();
             if (!jsonText) return alert("Please paste database string.");
-
             try {
                 const imported = JSON.parse(jsonText);
                 if (imported.habits && imported.logs && imported.blueprints) {
+                    if (!confirm(`Import will replace local data with ${imported.habits.length} habits and ${Object.keys(imported.logs).length} logs. Continue?`)) return;
                     db.habits = imported.habits;
                     db.logs = imported.logs;
                     db.blueprints = imported.blueprints;
-                    
                     db._save('habits', db.habits);
                     db._save('logs', db.logs);
                     db._save('blueprints', db.blueprints);
-                    
                     if (imported.settings) {
                         db.settings = imported.settings;
                         db._save('settings', db.settings);
@@ -3131,27 +2869,19 @@ function doPost(e) {
             }
         });
 
-        this.container.querySelector('#btn-reset-db').addEventListener('click', () => {
-            if (confirm("permanently reset back to templates?")) {
-                localStorage.clear();
-                window.location.reload();
-            }
-        });
-
+        // Test connection
         this.container.querySelector('#btn-test-sync').addEventListener('click', async () => {
             const url = this.container.querySelector('#sheets-url-input').value.trim();
             if (!url) return alert("Enter URL.");
-
             const btn = this.container.querySelector('#btn-test-sync');
-            btn.innerHTML = `<i data-lucide="loader" class="animate-pulse"></i> Connecting...`;
+            btn.innerHTML = `<i data-lucide="loader" class="animate-pulse"></i> ...`;
             lucide.createIcons();
-
             try {
                 const ok = await db.testSheetsConnection(url);
                 if (ok) {
                     db.saveSettings({ sheetsUrl: url });
                     this._updateConnectionBadge(true);
-                    this._showToast("Connection Successful!");
+                    this._showToast("Connected!");
                 } else {
                     this._updateConnectionBadge(false);
                     alert("Invalid sheets script response.");
@@ -3160,65 +2890,91 @@ function doPost(e) {
                 this._updateConnectionBadge(false);
                 alert("Connection failed! Make sure script is deployed for Anyone.");
             } finally {
-                btn.innerHTML = `<i data-lucide="activity"></i> Test Link`;
+                btn.innerHTML = `<i data-lucide="activity" style="width:13px;height:13px;"></i> Test`;
                 lucide.createIcons();
             }
         });
 
+        // PULL with confirmation
         this.container.querySelector('#btn-pull-sync').addEventListener('click', async () => {
             const settings = db.getSettings();
             if (!settings.sheetsUrl) return alert("Configure sync sheet first.");
+            if (!confirm("PULL will download cloud data and REPLACE all your local data.\n\nYour current local habits & logs will be overwritten.\nContinue?")) return;
 
             const btn = this.container.querySelector('#btn-pull-sync');
             btn.innerHTML = `<i data-lucide="loader"></i> Pulling...`;
             lucide.createIcons();
-
             try {
                 const ok = await db.pullFromGoogleSheets();
                 if (ok) {
-                    alert("Cloud data synchronized! Reloading dashboard...");
+                    db.saveSettings({ lastSyncTime: Date.now() });
+                    alert("Cloud data synchronized! Reloading...");
                     window.location.reload();
                 }
             } catch (e) {
                 alert("Sync pull failed: " + e.message);
             } finally {
-                btn.innerHTML = `<i data-lucide="arrow-down-to-line"></i> Pull Cloud`;
+                btn.innerHTML = `<i data-lucide="arrow-down-to-line" style="width:13px;height:13px;"></i> Pull`;
                 lucide.createIcons();
             }
         });
 
+        // PUSH with confirmation
         this.container.querySelector('#btn-push-sync').addEventListener('click', async () => {
             const settings = db.getSettings();
             if (!settings.sheetsUrl) return alert("Configure sync sheet first.");
+            const hCount = db.getHabits().length;
+            const lCount = Object.keys(db.logs).length;
+            if (!confirm(`PUSH will OVERWRITE your Google Sheet with local data.\n\nUploading: ${hCount} habits, ${lCount} daily logs.\n\nThis replaces everything on the sheet. Continue?`)) return;
 
             const btn = this.container.querySelector('#btn-push-sync');
             btn.innerHTML = `<i data-lucide="loader"></i> Pushing...`;
             lucide.createIcons();
-
             try {
                 const ok = await db.pushToGoogleSheets();
-                if (ok) this._showToast("Spreadsheet backup completed!");
+                if (ok) {
+                    db.saveSettings({ lastSyncTime: Date.now() });
+                    const timeSpan = this.container.querySelector('#last-sync-time');
+                    if (timeSpan) timeSpan.textContent = new Date().toLocaleString();
+                    this._showToast("Spreadsheet backup completed!");
+                }
             } catch (e) {
                 alert("Sync push failed: " + e.message);
             } finally {
-                btn.innerHTML = `<i data-lucide="arrow-up-from-line"></i> Push Cloud`;
+                btn.innerHTML = `<i data-lucide="arrow-up-from-line" style="width:13px;height:13px;"></i> Push`;
                 lucide.createIcons();
             }
         });
 
+        // Auto-sync toggle
         this.container.querySelector('#auto-sync-checkbox').addEventListener('change', (e) => {
             db.saveSettings({ autoSync: e.target.checked });
             this._showToast("Auto-sync preferences saved.");
         });
     },
 
+    _setupCollapsible(toggleId, contentId, chevronId) {
+        const toggle = this.container.querySelector('#' + toggleId);
+        const content = this.container.querySelector('#' + contentId);
+        const chevron = this.container.querySelector('#' + chevronId);
+        if (toggle && content) {
+            toggle.addEventListener('click', () => {
+                const isOpen = content.style.display !== 'none';
+                content.style.display = isOpen ? 'none' : 'block';
+                if (chevron) chevron.style.transform = isOpen ? '' : 'rotate(180deg)';
+            });
+        }
+    },
+
     _toggleTheme(theme) {
         document.documentElement.setAttribute('data-theme', theme);
         db.saveSettings({ theme });
-        
+        const metaThemeColor = document.querySelector('meta[name="theme-color"]');
+        if (metaThemeColor) {
+            metaThemeColor.setAttribute('content', theme === 'light' ? '#f5f4f0' : '#0d0d0f');
+        }
         const btnLight = this.container.querySelector('#btn-theme-light');
         const btnDark = this.container.querySelector('#btn-theme-dark');
-        
         if (theme === 'light') {
             btnLight.classList.add('active');
             btnDark.classList.remove('active');
@@ -3313,7 +3069,12 @@ class AppShell {
 
     applyTheme() {
         const settings = db.getSettings();
-        document.documentElement.setAttribute('data-theme', settings.theme || 'dark');
+        const theme = settings.theme || 'dark';
+        document.documentElement.setAttribute('data-theme', theme);
+        const metaThemeColor = document.querySelector('meta[name="theme-color"]');
+        if (metaThemeColor) {
+            metaThemeColor.setAttribute('content', theme === 'light' ? '#f5f4f0' : '#0d0d0f');
+        }
     }
 
     bindGlobalListeners() {

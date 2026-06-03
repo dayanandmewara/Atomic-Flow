@@ -1,4 +1,4 @@
-const CACHE_NAME = 'atomicflow-v1';
+const CACHE_NAME = 'atomicflow-v2';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',

@@ -39,7 +39,7 @@
     align-items: center;
     justify-content: center;
     color: #ffffff;
-    box-shadow: 0 1px 3px rgba(26,115,232,0.3);
+    box-shadow: 0 2px 8px rgba(184, 240, 100, 0.25);
 }
 
 .brand-name {
@@ -326,7 +326,7 @@
 
     .app-content {
         margin-left: 0;
-        padding: 1.25rem 1rem 5rem 1rem;
+        padding: calc(1.25rem + env(safe-area-inset-top)) 1rem 5rem 1rem;
         max-width: 100%;
     }
 
