@@ -9,6 +9,26 @@
 // =========================================================================
 const DB_PREFIX = 'atomicflow_';
 
+// Helper: Hash password using SHA-256 (Web Crypto API)
+async function hashPassword(password) {
+    if (!password) return '';
+    const msgBuffer = new TextEncoder().encode(password);
+    try {
+        const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+        const hashArray = Array.from(new Uint8Array(hashBuffer));
+        return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    } catch (e) {
+        console.warn("Crypto API failed, using fallback hash", e);
+        let hash = 0;
+        for (let i = 0; i < password.length; i++) {
+            const char = password.charCodeAt(i);
+            hash = ((hash << 5) - hash) + char;
+            hash = hash & hash;
+        }
+        return "fallback_" + hash.toString(16);
+    }
+}
+
 class DatabaseManager {
     constructor() {
         this.habits = this._load('habits') || [];
@@ -20,13 +40,17 @@ class DatabaseManager {
             ],
             stacks: []
         };
-        this.settings = this._load('settings') || {
+        const defaultSettings = {
             theme: 'dark', // Google dark theme default
             sheetsUrl: '',
             userName: 'Achiever',
             autoSync: false,
+            useNetlifyProxy: false,
+            passwordHash: '',
+            lockTimeout: 0, // 0 = Never
             xp: 0
         };
+        this.settings = { ...defaultSettings, ...(this._load('settings') || {}) };
         this.tasks = this._load('tasks') || [];
 
         // V4: Ensure theme is migrated to dark mode once
@@ -40,6 +64,7 @@ class DatabaseManager {
         if (this.habits.length === 0 || this.habits.some(h => h.id === 'h_sleep') || this.habits.some(h => h.id === 'h_cleaning') || !this.habits.some(h => h.id === 'h_hygiene')) {
             this._seedSampleData();
         }
+        this.useProxy = !!this.settings.useNetlifyProxy;
     }
 
     _save(key, data) {
@@ -76,7 +101,13 @@ class DatabaseManager {
             habit.createdAt = Date.now();
             habit.updatedAt = Date.now();
             habit.active = true;
-            if (!habit.timeOfDay) habit.timeOfDay = 'morning';
+            if (!habit.timeOfDay) {
+                const hour = new Date().getHours();
+                if (hour >= 5 && hour < 10) habit.timeOfDay = 'morning';
+                else if (hour >= 10 && hour < 17) habit.timeOfDay = 'daytime';
+                else if (hour >= 17 && hour < 21) habit.timeOfDay = 'evening';
+                else habit.timeOfDay = 'night';
+            }
             this.habits.push(habit);
         }
         this._save('habits', this.habits);
@@ -202,6 +233,9 @@ class DatabaseManager {
 
     saveSettings(newSettings) {
         this.settings = { ...this.settings, ...newSettings };
+        if (newSettings.useNetlifyProxy !== undefined) {
+            this.useProxy = !!newSettings.useNetlifyProxy;
+        }
         this._save('settings', this.settings);
     }
 
@@ -278,6 +312,22 @@ class DatabaseManager {
     }
 
     async testSheetsConnection(url) {
+        const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+        if (this.useProxy && !isLocal) {
+            const proxyUrl = `/api/proxy?action=test`;
+            try {
+                const res = await fetch(proxyUrl, {
+                    headers: { 'x-target-url': url }
+                });
+                if (!res.ok) throw new Error(`Proxy HTTP Error ${res.status}`);
+                const data = await res.json();
+                return data.status === 'ok';
+            } catch (e) {
+                console.error("Proxy test connection failed:", e);
+                throw e;
+            }
+        }
+
         const testUrl = `${url}?action=test`;
         try {
             const res = await fetch(testUrl);
@@ -303,6 +353,25 @@ class DatabaseManager {
             timestamp: Date.now()
         };
 
+        const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+        if (this.useProxy && !isLocal) {
+            try {
+                const res = await fetch('/api/proxy', {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'x-target-url': url 
+                    },
+                    body: JSON.stringify(payload)
+                });
+                if (!res.ok) throw new Error(`Proxy Push HTTP Error ${res.status}`);
+                return true;
+            } catch (e) {
+                console.error("Failed to push data via proxy:", e);
+                throw e;
+            }
+        }
+
         try {
             await fetch(url, {
                 method: 'POST',
@@ -320,6 +389,39 @@ class DatabaseManager {
     async pullFromGoogleSheets() {
         const url = this.settings.sheetsUrl;
         if (!url) return false;
+
+        const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+        if (this.useProxy && !isLocal) {
+            const proxyUrl = `/api/proxy?action=pull`;
+            try {
+                const res = await fetch(proxyUrl, {
+                    headers: { 'x-target-url': url }
+                });
+                if (!res.ok) throw new Error(`Proxy Pull HTTP Error ${res.status}`);
+                const data = await res.json();
+                
+                if (data.habits) {
+                    this.habits = data.habits;
+                    this._save('habits', this.habits);
+                }
+                if (data.logs) {
+                    this.logs = data.logs;
+                    this._save('logs', this.logs);
+                }
+                if (data.blueprints) {
+                    this.blueprints = data.blueprints;
+                    this._save('blueprints', this.blueprints);
+                }
+                if (data.tasks) {
+                    this.tasks = data.tasks;
+                    this._save('tasks', this.tasks);
+                }
+                return true;
+            } catch (e) {
+                console.error("Failed to pull data via proxy:", e);
+                throw e;
+            }
+        }
 
         const pullUrl = `${url}?action=pull`;
         try {
@@ -551,16 +653,16 @@ const Dashboard = {
         this.selectedDate = new Date().toISOString().split('T')[0];
         this.activeFilter = 'all';
         
-        // Smart Auto-Detect Time of Day: Morning before 12:00 PM, Evening 5:00 PM - 9:00 PM, Night after 9:00 PM
+        // Smart Auto-Detect Time of Day: Morning 5-10 AM, Daytime 10 AM-5 PM, Evening 5-9 PM, Night 9 PM-5 AM
         const hour = new Date().getHours();
-        if (hour < 12) {
+        if (hour >= 5 && hour < 10) {
             this.activeTimeFilter = 'morning';
+        } else if (hour >= 10 && hour < 17) {
+            this.activeTimeFilter = 'daytime';
         } else if (hour >= 17 && hour < 21) {
             this.activeTimeFilter = 'evening';
-        } else if (hour >= 21 || hour < 5) {
-            this.activeTimeFilter = 'night';
         } else {
-            this.activeTimeFilter = 'all';
+            this.activeTimeFilter = 'night';
         }
         
         this.container = container;
@@ -623,10 +725,11 @@ const Dashboard = {
                                     <p class="card-subtitle" style="font-size: 0.8rem; margin: 2px 0 0 0;">Daily routines grouped by identity (home time only).</p>
                                 </div>
 
-                                <!-- V4 Segmented Time of Day Filter (3 routines: Morning, Evening, Night) -->
+                                <!-- V4 Segmented Time of Day Filter (4 routines: Morning, Daytime, Evening, Night) -->
                                 <div class="time-filter-segmented" style="display: inline-flex; background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: 20px; padding: 2px; height: fit-content; align-self: center; flex-wrap: wrap; gap: 2px;">
                                     <button class="btn time-filter-btn ${this.activeTimeFilter === 'all' ? 'active-segment' : ''}" data-time="all" style="padding: 0.25rem 0.65rem; font-size: 0.72rem; border: none; background: transparent; border-radius: 18px; font-weight: 600; color: var(--text-secondary); transition: all 0.2s; height: auto;">✨ All</button>
                                     <button class="btn time-filter-btn ${this.activeTimeFilter === 'morning' ? 'active-segment' : ''}" data-time="morning" style="padding: 0.25rem 0.65rem; font-size: 0.72rem; border: none; background: transparent; border-radius: 18px; font-weight: 600; color: var(--text-secondary); transition: all 0.2s; height: auto;">🌅 Morning</button>
+                                    <button class="btn time-filter-btn ${this.activeTimeFilter === 'daytime' ? 'active-segment' : ''}" data-time="daytime" style="padding: 0.25rem 0.65rem; font-size: 0.72rem; border: none; background: transparent; border-radius: 18px; font-weight: 600; color: var(--text-secondary); transition: all 0.2s; height: auto;">☀️ Daytime</button>
                                     <button class="btn time-filter-btn ${this.activeTimeFilter === 'evening' ? 'active-segment' : ''}" data-time="evening" style="padding: 0.25rem 0.65rem; font-size: 0.72rem; border: none; background: transparent; border-radius: 18px; font-weight: 600; color: var(--text-secondary); transition: all 0.2s; height: auto;">🌙 Evening</button>
                                     <button class="btn time-filter-btn ${this.activeTimeFilter === 'night' ? 'active-segment' : ''}" data-time="night" style="padding: 0.25rem 0.65rem; font-size: 0.72rem; border: none; background: transparent; border-radius: 18px; font-weight: 600; color: var(--text-secondary); transition: all 0.2s; height: auto;">🌃 Night</button>
                                 </div>
@@ -686,7 +789,7 @@ const Dashboard = {
                             <div style="font-size: 0.82rem; display: flex; flex-direction: column; gap: 0.55rem;">
                                 <div style="display: flex; gap: 1rem; align-items: center; border-bottom: 1px dashed var(--border-color); padding-bottom: 6px; margin-bottom: 2px;">
                                     <div>Mood: <strong style="font-size: 1rem;">${["😔", "😐", "🙂", "😊", "😄"][log.mood - 1] || 'None'}</strong></div>
-                                    <div style="border-left: 1px solid var(--border-color); padding-left: 10px;">Energy: <strong>${log.energy || 3} / 5</strong></div>
+                                    <div style="border-left: 1px solid var(--border-color); padding-left: 10px;">Energy: <strong>${log.energy !== undefined && log.energy > 0 ? log.energy : 'Not set'} / 5</strong></div>
                                 </div>
                                 ${winsText ? `<div><strong>Today's Win 🏆:</strong> <span style="color: var(--text-secondary);">${winsText}</span></div>` : ''}
                                 ${hardText ? `<div><strong>What was Hard 💪:</strong> <span style="color: var(--text-secondary);">${hardText}</span></div>` : ''}
@@ -710,86 +813,7 @@ const Dashboard = {
         this._setupListeners();
     },
 
-    // V3: Google-style Sleep Logger card template renderer
-    _renderSleepLoggerCard(log) {
-        const bedtime = log.sleepBedtime || '';
-        const wakeup = log.sleepWakeup || '';
-        const quality = log.sleepQuality || 0;
-
-        if (bedtime && wakeup) {
-            // Already logged! Show Google Tasks-style completed view
-            const duration = AtomicManager.calculateSleepDuration(bedtime, wakeup);
-            
-            const qualityLabels = ["Restless 😢", "Okay 😐", "Refreshed 😄"];
-            const isHealthy = duration >= 7 && duration <= 9;
-            const healthColor = isHealthy ? 'var(--color-success)' : 'var(--color-warning)';
-            
-            // Format military time to beautiful AM/PM format
-            const formatTime = (t) => {
-                let [h, m] = t.split(':').map(Number);
-                let ampm = h >= 12 ? 'PM' : 'AM';
-                h = h % 12;
-                h = h ? h : 12; // 0 becomes 12
-                m = m < 10 ? '0' + m : m;
-                return `${h}:${m} ${ampm}`;
-            };
-
-            return `
-                <div class="animate-fade-in" style="display: flex; flex-direction: column; gap: 0.75rem; padding: 0.25rem 0;">
-                    <div style="display: flex; align-items: center; gap: 10px; background: rgba(30, 142, 62, 0.05); padding: 0.75rem; border-radius: var(--radius-md); border: 1px solid rgba(30, 142, 62, 0.15);">
-                        <i data-lucide="check-circle-2" style="color: var(--color-success); width: 22px; height: 22px; flex-shrink: 0;"></i>
-                        <div style="font-size: 0.85rem; color: var(--text-primary); line-height: 1.4;">
-                            Logged Bedtime: <strong>${formatTime(bedtime)}</strong> &rarr; <strong>${formatTime(wakeup)}</strong>
-                        </div>
-                    </div>
-                    
-                    <div style="display: flex; gap: 0.75rem; font-size: 0.8rem; margin-top: 0.25rem;">
-                        <div style="flex: 1; background: var(--bg-primary); padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border-color); text-align: center;">
-                            <span style="display: block; font-size: 0.7rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase;">Duration</span>
-                            <span style="font-size: 1.1rem; font-weight: 700; color: ${healthColor};">${duration} hrs</span>
-                            <span style="display: block; font-size: 0.65rem; color: var(--text-muted); font-weight: 500; margin-top: 2px;">
-                                ${isHealthy ? 'Healthy Sleep 💚' : 'Outside Target ⚠️'}
-                            </span>
-                        </div>
-                        <div style="flex: 1; background: var(--bg-primary); padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border-color); text-align: center;">
-                            <span style="display: block; font-size: 0.7rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase;">Quality</span>
-                            <span style="font-size: 1.1rem; font-weight: 700; color: var(--primary);">${qualityLabels[quality - 1] || 'Okay 😐'}</span>
-                            <span style="display: block; font-size: 0.65rem; color: var(--text-muted); font-weight: 500; margin-top: 2px;">Subjective score</span>
-                        </div>
-                    </div>
-                    
-                    <button class="btn btn-secondary" id="btn-edit-sleep" style="padding: 0.35rem 0.75rem; font-size: 0.75rem; border-radius: 12px; margin-top: 0.5rem; width: fit-content; align-self: flex-end;"><i data-lucide="edit-3" style="width: 12px; height: 12px;"></i> Adjust Logs</button>
-                </div>
-            `;
-        } else {
-            // Not logged yet! Show Google Keep-Style input form
-            return `
-                <form id="sleep-logger-form" style="display: flex; flex-direction: column; gap: 0.75rem;">
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
-                        <div class="form-group" style="margin-bottom: 0; gap: 4px;">
-                            <label style="font-size: 0.75rem; font-weight: 600; color: var(--text-secondary);">Bedtime</label>
-                            <input type="time" id="sleep-bedtime-input" class="form-control" style="padding: 0.4rem 0.6rem; font-size: 0.85rem;" value="22:30" required>
-                        </div>
-                        <div class="form-group" style="margin-bottom: 0; gap: 4px;">
-                            <label style="font-size: 0.75rem; font-weight: 600; color: var(--text-secondary);">Wake Up</label>
-                            <input type="time" id="sleep-wakeup-input" class="form-control" style="padding: 0.4rem 0.6rem; font-size: 0.85rem;" value="06:30" required>
-                        </div>
-                    </div>
-
-                    <div class="form-group" style="margin-bottom: 0; gap: 4px;">
-                        <label style="font-size: 0.75rem; font-weight: 600; color: var(--text-secondary);">Rest Quality</label>
-                        <select id="sleep-quality-select" class="form-control" style="padding: 0.4rem 0.6rem; font-size: 0.85rem;">
-                            <option value="3" selected>😄 Fully Refreshed & Energized</option>
-                            <option value="2">😐 Rested (Okay Sleep)</option>
-                            <option value="1">😢 Restless (Tired / Interrupted)</option>
-                        </select>
-                    </div>
-
-                    <button type="submit" class="btn btn-primary" style="padding: 0.45rem 1rem; font-size: 0.8rem; border-radius: 12px; font-weight: 600; margin-top: 0.25rem;"><i data-lucide="moon"></i> Save Log & +20 XP</button>
-                </form>
-            `;
-        }
-    },
+    
 
     _renderGroupedHabits(habits, log, identities) {
         if (habits.length === 0) {
@@ -924,22 +948,27 @@ const Dashboard = {
             `;
         } else {
             return `
+                <div style="display: flex; align-items: center; gap: 8px; background: rgba(255, 255, 255, 0.02); padding: 0.6rem 0.75rem; border-radius: 8px; border: 1px dashed var(--border-color); font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 0.25rem;">
+                    <i data-lucide="moon" style="width: 16px; height: 16px; color: var(--text-muted);"></i>
+                    <span>🌙 Sleep not logged yet</span>
+                </div>
                 <form id="sleep-logger-form" style="display: flex; flex-direction: column; gap: 0.75rem;">
                     <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
                         <div class="form-group" style="margin-bottom: 0; gap: 4px;">
                             <label style="font-size: 0.75rem; font-weight: 600; color: var(--text-secondary);">Bedtime</label>
-                            <input type="time" id="sleep-bedtime-input" class="form-control" style="padding: 0.4rem 0.6rem; font-size: 0.85rem;" value="22:30" required>
+                            <input type="time" id="sleep-bedtime-input" class="form-control" style="padding: 0.4rem 0.6rem; font-size: 0.85rem;" value="" required>
                         </div>
                         <div class="form-group" style="margin-bottom: 0; gap: 4px;">
                             <label style="font-size: 0.75rem; font-weight: 600; color: var(--text-secondary);">Wake Up</label>
-                            <input type="time" id="sleep-wakeup-input" class="form-control" style="padding: 0.4rem 0.6rem; font-size: 0.85rem;" value="06:30" required>
+                            <input type="time" id="sleep-wakeup-input" class="form-control" style="padding: 0.4rem 0.6rem; font-size: 0.85rem;" value="" required>
                         </div>
                     </div>
 
                     <div class="form-group" style="margin-bottom: 0; gap: 4px;">
                         <label style="font-size: 0.75rem; font-weight: 600; color: var(--text-secondary);">Rest Quality</label>
-                        <select id="sleep-quality-select" class="form-control" style="padding: 0.4rem 0.6rem; font-size: 0.85rem;">
-                            <option value="3" selected>😄 Fully Refreshed & Energized</option>
+                        <select id="sleep-quality-select" class="form-control" style="padding: 0.4rem 0.6rem; font-size: 0.85rem;" required>
+                            <option value="" disabled selected>-- Select Quality --</option>
+                            <option value="3">😄 Fully Refreshed & Energized</option>
                             <option value="2">😐 Rested (Okay Sleep)</option>
                             <option value="1">😢 Restless (Tired / Interrupted)</option>
                         </select>
@@ -1116,6 +1145,7 @@ const Dashboard = {
 
                 currentLog.sleepBedtime = '';
                 currentLog.sleepWakeup = '';
+                currentLog.sleepQuality = 0;
                 db.saveLogForDate(this.selectedDate, currentLog);
                 this.updateView();
 
@@ -1197,7 +1227,7 @@ const Journal = {
     loadDateLog() {
         const log = db.getLogForDate(this.selectedDate);
         this.activeMood = log.mood || 0;
-        this.activeEnergy = log.energy || 3;
+        this.activeEnergy = log.energy !== undefined && log.energy > 0 ? log.energy : 3;
         this.updateView(log);
     },
 
@@ -1230,7 +1260,7 @@ const Journal = {
         const isTomorrowChanged = tomorrowVal !== currentTomorrowText;
         const isFreeChanged = freeVal !== currentFreeText;
         const isMoodChanged = this.activeMood !== (currentLog.mood || 0);
-        const isEnergyChanged = this.activeEnergy !== (currentLog.energy || 3);
+        const isEnergyChanged = this.activeEnergy !== (currentLog.energy !== undefined && currentLog.energy > 0 ? currentLog.energy : 3);
 
         if (isWinsChanged || isHardChanged || isAnxietyChanged || isTomorrowChanged || isFreeChanged || isMoodChanged || isEnergyChanged) {
             const logData = {
@@ -1457,7 +1487,7 @@ const Journal = {
             const logData = {
                 mood: this.activeMood,
                 energy: this.activeEnergy || 3,
-                wins: winsVal ? [winsVal] : [],
+                wins: winsVal ? winsVal.split('\n').map(w => w.trim()).filter(Boolean) : [],
                 hard: hardVal,
                 anxiety: anxietyVal,
                 tomorrow: tomorrowVal,
@@ -1831,6 +1861,7 @@ const Blueprint = {
                                             <button type="button" class="color-pick-btn" data-color="career" style="width: 28px; height: 28px; border-radius: 50%; border: 2px solid transparent; background: #a78bfa; cursor: pointer; transition: all 0.15s;" title="Career"></button>
                                             <button type="button" class="color-pick-btn" data-color="other" style="width: 28px; height: 28px; border-radius: 50%; border: 2px solid transparent; background: #f5b942; cursor: pointer; transition: all 0.15s;" title="General"></button>
                                         </div>
+                                        <span id="color-legend-label" style="font-size: 0.7rem; color: var(--text-muted); font-weight: 500; display: block; margin-top: 4px;">Active: Health (Green)</span>
                                         <input type="hidden" id="new-habit-category" value="health">
                                     </div>
 
@@ -1840,6 +1871,7 @@ const Blueprint = {
                                         </label>
                                         <select id="new-habit-time" class="form-control" style="font-size: 0.82rem; padding: 0.45rem 0.65rem;">
                                             <option value="morning">🌅 Morning</option>
+                                            <option value="daytime">☀️ Daytime</option>
                                             <option value="evening">🌙 Evening</option>
                                             <option value="night">🌃 Night</option>
                                         </select>
@@ -1944,6 +1976,8 @@ const Blueprint = {
         // Color Picker
         const colorBtns = this.container.querySelectorAll('.color-pick-btn');
         const categoryInput = this.container.querySelector('#new-habit-category');
+        const colorLegend = this.container.querySelector('#color-legend-label');
+        const colorNames = { health: 'Health (Green)', mind: 'Mind (Blue)', career: 'Career (Purple)', other: 'General (Orange)' };
         colorBtns.forEach(btn => {
             btn.addEventListener('click', () => {
                 colorBtns.forEach(b => {
@@ -1952,7 +1986,9 @@ const Blueprint = {
                 });
                 btn.style.borderColor = 'var(--primary)';
                 btn.classList.add('active');
-                categoryInput.value = btn.getAttribute('data-color');
+                const cat = btn.getAttribute('data-color');
+                categoryInput.value = cat;
+                if (colorLegend) colorLegend.innerText = `Active: ${colorNames[cat]}`;
             });
         });
 
@@ -1977,6 +2013,7 @@ const Blueprint = {
                 colorBtns.forEach(b => { b.style.borderColor = 'transparent'; b.classList.remove('active'); });
                 if (colorBtns[0]) { colorBtns[0].style.borderColor = 'var(--primary)'; colorBtns[0].classList.add('active'); }
                 categoryInput.value = 'health';
+                if (colorLegend) colorLegend.innerText = `Active: Health (Green)`;
                 this.updateView();
                 
                 if (window.globalAppInstance) {
@@ -2009,6 +2046,7 @@ const Analytics = {
         let totalSleepHours = 0;
         let sleepCount = 0;
         let sleepQualitySum = 0;
+        let sleepQualityCount = 0;
         let goodSleepCompletions = 0;
         let goodSleepPossible = 0;
         let lowSleepCompletions = 0;
@@ -2020,9 +2058,13 @@ const Analytics = {
                 const duration = AtomicManager.calculateSleepDuration(log.sleepBedtime, log.sleepWakeup);
                 totalSleepHours += duration;
                 sleepCount++;
-                sleepQualitySum += (log.sleepQuality || 2);
                 
-                const isGoodSleep = duration >= 7.0 || (log.sleepQuality && log.sleepQuality >= 3);
+                if (log.sleepQuality && log.sleepQuality > 0) {
+                    sleepQualitySum += log.sleepQuality;
+                    sleepQualityCount++;
+                }
+                
+                const isGoodSleep = duration >= 7.0 && (log.sleepQuality && log.sleepQuality >= 3);
                 const completionsCount = log.completions 
                     ? Object.keys(log.completions).filter(hId => habits.some(h => h.id === hId) && log.completions[hId].completed).length 
                     : 0;
@@ -2041,7 +2083,7 @@ const Analytics = {
         });
 
         const avgSleepHours = sleepCount > 0 ? Math.round((totalSleepHours / sleepCount) * 10) / 10 : 0;
-        const avgSleepQuality = sleepCount > 0 ? Math.round((sleepQualitySum / sleepCount) * 10) / 10 : 0;
+        const avgSleepQuality = sleepQualityCount > 0 ? Math.round((sleepQualitySum / sleepQualityCount) * 10) / 10 : 0;
         
         const goodSleepRate = goodSleepPossible > 0 ? Math.round((goodSleepCompletions / goodSleepPossible) * 100) : 0;
         const lowSleepRate = lowSleepPossible > 0 ? Math.round((lowSleepCompletions / lowSleepPossible) * 100) : 0;
@@ -2077,9 +2119,11 @@ const Analytics = {
             };
         });
 
-        // 3. TIME-OF-DAY ROUTINE BREAKDOWN (Morning, Evening, Night)
+        // 3. TIME-OF-DAY ROUTINE BREAKDOWN (Morning, Daytime, Evening, Night)
         let morningPossible = 0;
         let morningCompleted = 0;
+        let daytimePossible = 0;
+        let daytimeCompleted = 0;
         let eveningPossible = 0;
         let eveningCompleted = 0;
         let nightPossible = 0;
@@ -2088,10 +2132,12 @@ const Analytics = {
         Object.keys(logs).forEach(dateStr => {
             const logDate = new Date(dateStr).getTime() + (24 * 60 * 60 * 1000);
             const activeMorning = habits.filter(h => h.timeOfDay === 'morning' && h.createdAt <= logDate);
+            const activeDaytime = habits.filter(h => h.timeOfDay === 'daytime' && h.createdAt <= logDate);
             const activeEvening = habits.filter(h => h.timeOfDay === 'evening' && h.createdAt <= logDate);
             const activeNight = habits.filter(h => h.timeOfDay === 'night' && h.createdAt <= logDate);
             
             morningPossible += activeMorning.length;
+            daytimePossible += activeDaytime.length;
             eveningPossible += activeEvening.length;
             nightPossible += activeNight.length;
             
@@ -2099,6 +2145,11 @@ const Analytics = {
                 activeMorning.forEach(h => {
                     if (logs[dateStr].completions[h.id] && logs[dateStr].completions[h.id].completed) {
                         morningCompleted++;
+                    }
+                });
+                activeDaytime.forEach(h => {
+                    if (logs[dateStr].completions[h.id] && logs[dateStr].completions[h.id].completed) {
+                        daytimeCompleted++;
                     }
                 });
                 activeEvening.forEach(h => {
@@ -2115,6 +2166,7 @@ const Analytics = {
         });
 
         const morningRate = morningPossible > 0 ? Math.round((morningCompleted / morningPossible) * 100) : 0;
+        const daytimeRate = daytimePossible > 0 ? Math.round((daytimeCompleted / daytimePossible) * 100) : 0;
         const eveningRate = eveningPossible > 0 ? Math.round((eveningCompleted / eveningPossible) * 100) : 0;
         const nightRate = nightPossible > 0 ? Math.round((nightCompleted / nightPossible) * 100) : 0;
 
@@ -2287,7 +2339,7 @@ const Analytics = {
 
                         <!-- Identity Pillars visual progress -->
                         <div style="display: flex; flex-direction: column; gap: 0.75rem;">
-                            <span style="font-size: 0.7 flex-shrink: 0; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Identity Verification Scores:</span>
+                            <span style="font-size: 0.7rem; flex-shrink: 0; font-weight: 700; color: var(--text-muted); text-transform: uppercase;">Identity Verification Scores:</span>
                             ${identityStats.map(id => `
                                 <div>
                                     <div style="display: flex; justify-content: space-between; font-size: 0.78rem; font-weight: 600; margin-bottom: 4px; color: var(--text-primary);">
@@ -2312,6 +2364,15 @@ const Analytics = {
                                     </div>
                                     <div style="width: 100%; height: 6px; background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: 4px; overflow: hidden;">
                                         <div style="width: ${morningRate}%; height: 100%; background: #f5b942; border-radius: 4px;"></div>
+                                    </div>
+                                </div>
+                                <div style="flex: 1; min-width: 100px;">
+                                    <div style="display: flex; justify-content: space-between; font-size: 0.75rem; margin-bottom: 2px;">
+                                        <span>☀️ Daytime</span>
+                                        <strong>${daytimeRate}%</strong>
+                                    </div>
+                                    <div style="width: 100%; height: 6px; background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: 4px; overflow: hidden;">
+                                        <div style="width: ${daytimeRate}%; height: 100%; background: #64b0f0; border-radius: 4px;"></div>
                                     </div>
                                 </div>
                                 <div style="flex: 1; min-width: 100px;">
@@ -2348,7 +2409,7 @@ const Analytics = {
                         ${habitStats.map(hs => {
                             const timingTag = hs.habit.timeOfDay === 'morning' 
                                 ? '🌅 Morning' 
-                                : (hs.habit.timeOfDay === 'night' ? '🌃 Night' : '🌙 Evening');
+                                : (hs.habit.timeOfDay === 'daytime' ? '☀️ Daytime' : (hs.habit.timeOfDay === 'night' ? '🌃 Night' : '🌙 Evening'));
                             const streakBadgeColor = hs.streak >= 5 ? 'background: rgba(239, 68, 68, 0.1); color: #ef4444; border-color: rgba(239,68,68,0.2);' : 'background: rgba(255, 255, 255, 0.02); color: var(--text-secondary); border-color: var(--border-color);';
                             
                             return `
@@ -2630,15 +2691,24 @@ const Settings = {
                             <input type="text" id="sheets-url-input" class="form-control" style="border-radius: 8px; font-size: 0.82rem; padding: 0.4rem 0.65rem;" value="${settings.sheetsUrl || ''}" placeholder="https://script.google.com/macros/s/.../exec">
                         </div>
 
-                        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
-                            <label class="checkbox-wrapper" style="width: auto; height: auto; display: flex; align-items: center; gap: 6px; font-size: 0.78rem; font-weight: 600; color: var(--text-secondary);">
-                                <input type="checkbox" id="auto-sync-checkbox" ${settings.autoSync ? 'checked' : ''}>
-                                <span class="checkmark" style="width: 16px; height: 16px; border-radius: 4px; border-width: 1px;"><i data-lucide="check" style="width: 9px; height: 9px;"></i></span>
-                                <span>Auto-sync on actions</span>
-                            </label>
-                            <span id="sync-conn-badge" class="badge" style="background: rgba(217, 48, 37, 0.1); color: #d93025; border: 1px solid rgba(217, 48, 37, 0.15); padding: 2px 8px; border-radius: 12px; font-size: 0.68rem; font-weight: 700;">
-                                Disconnected
-                            </span>
+                        <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+                                <label class="checkbox-wrapper" style="width: auto; height: auto; display: flex; align-items: center; gap: 6px; font-size: 0.78rem; font-weight: 600; color: var(--text-secondary);">
+                                    <input type="checkbox" id="auto-sync-checkbox" ${settings.autoSync ? 'checked' : ''}>
+                                    <span class="checkmark" style="width: 16px; height: 16px; border-radius: 4px; border-width: 1px;"><i data-lucide="check" style="width: 9px; height: 9px;"></i></span>
+                                    <span>Auto-sync on actions</span>
+                                </label>
+                                <span id="sync-conn-badge" class="badge" style="background: rgba(128, 128, 128, 0.1); color: var(--text-muted); border: 1px solid rgba(128, 128, 128, 0.15); padding: 2px 8px; border-radius: 12px; font-size: 0.68rem; font-weight: 700;">
+                                    Not Tested
+                                </span>
+                            </div>
+                            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 0.5rem;">
+                                <label class="checkbox-wrapper" style="width: auto; height: auto; display: flex; align-items: center; gap: 6px; font-size: 0.78rem; font-weight: 600; color: var(--text-secondary);">
+                                    <input type="checkbox" id="proxy-sync-checkbox" ${settings.useNetlifyProxy ? 'checked' : ''}>
+                                    <span class="checkmark" style="width: 16px; height: 16px; border-radius: 4px; border-width: 1px;"><i data-lucide="check" style="width: 9px; height: 9px;"></i></span>
+                                    <span>Route sync through Netlify Proxy</span>
+                                </label>
+                            </div>
                         </div>
 
                         <div style="font-size: 0.7rem; color: var(--text-muted); display: flex; align-items: center; gap: 4px;">
@@ -2656,6 +2726,54 @@ const Settings = {
                             <strong>Pull</strong> = Download cloud → replace local &nbsp;|&nbsp; <strong>Push</strong> = Upload local → overwrite cloud<br>
                             Local: <strong>${habitCount}</strong> habits, <strong>${logCount}</strong> daily logs.
                         </div>
+                    </div>
+                </div>
+
+                <!-- App Security Lock -->
+                <div class="glass-card" style="padding: 1rem 1.25rem; border-radius: var(--radius-md); margin-bottom: 0.75rem;">
+                    <h3 class="card-title" style="font-weight: 500; margin-bottom: 0.75rem; font-size: 1rem;">
+                        <i data-lucide="shield-alert" style="color: var(--primary); width: 18px; height: 18px;"></i> App Security Lock
+                    </h3>
+                    
+                    <div style="display: flex; flex-direction: column; gap: 0.75rem; background: var(--bg-primary); padding: 0.85rem; border-radius: var(--radius-md); border: 1px solid var(--border-color);">
+                        ${settings.passwordHash ? `
+                            <!-- Password enabled state -->
+                            <div style="display: flex; flex-direction: column; gap: 0.6rem;">
+                                <div style="display: flex; align-items: center; justify-content: space-between;">
+                                    <span style="font-size: 0.8rem; color: #137333; font-weight: 600; display: flex; align-items: center; gap: 4px;">
+                                        <i data-lucide="shield-check" style="width: 15px; height: 15px;"></i> Password Lock Active
+                                    </span>
+                                    <button class="btn btn-secondary" id="btn-disable-lock" style="font-size: 0.75rem; padding: 0.35rem 0.65rem; border-radius: 6px;">Disable</button>
+                                </div>
+                                
+                                <div class="form-group" style="margin-bottom: 0; margin-top: 0.25rem;">
+                                    <label style="font-size: 0.75rem; font-weight: 600;">Auto-Lock Timeout</label>
+                                    <select id="lock-timeout-select" class="form-control" style="border-radius: 8px; font-size: 0.82rem; padding: 0.4rem 0.65rem; background: var(--bg-primary); color: var(--text-primary); border: 1px solid var(--border-color);">
+                                        <option value="0" ${settings.lockTimeout == 0 ? 'selected' : ''}>Never auto-lock</option>
+                                        <option value="1" ${settings.lockTimeout == 1 ? 'selected' : ''}>1 minute</option>
+                                        <option value="5" ${settings.lockTimeout == 5 ? 'selected' : ''}>5 minutes</option>
+                                        <option value="15" ${settings.lockTimeout == 15 ? 'selected' : ''}>15 minutes</option>
+                                        <option value="30" ${settings.lockTimeout == 30 ? 'selected' : ''}>30 minutes</option>
+                                    </select>
+                                </div>
+                            </div>
+                        ` : `
+                            <!-- Password disabled state -->
+                            <div style="display: flex; flex-direction: column; gap: 0.6rem;">
+                                <span style="font-size: 0.78rem; color: var(--text-secondary); line-height: 1.4;">
+                                    Secure your habits and reflections. Enable password protection to lock the app on load and inactivity.
+                                </span>
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-top: 0.25rem;">
+                                    <div class="form-group" style="margin-bottom: 0;">
+                                        <input type="password" id="new-password" class="form-control" style="border-radius: 8px; font-size: 0.82rem; padding: 0.4rem 0.65rem;" placeholder="Set password">
+                                    </div>
+                                    <div class="form-group" style="margin-bottom: 0;">
+                                        <input type="password" id="confirm-password" class="form-control" style="border-radius: 8px; font-size: 0.82rem; padding: 0.4rem 0.65rem;" placeholder="Confirm password">
+                                    </div>
+                                </div>
+                                <button class="btn btn-primary" id="btn-enable-lock" style="font-size: 0.78rem; padding: 0.45rem 0.75rem; border-radius: 8px; width: 100%;">Enable Password Lock</button>
+                            </div>
+                        `}
                     </div>
                 </div>
 
@@ -2731,10 +2849,10 @@ function doPost(e) {
       tS.appendRow(["ID","Text","Done","Active","Date"]);tS.getRange(1,1,1,5).setFontWeight("bold").setBackground("#e8f0fe");
       if(d.tasks.length>0){var tD=d.tasks.map(function(t){return[t.id||"",t.text||"",t.completed?"Yes":"No",t.active!==false?"Yes":"No",t.date||""]});tS.getRange(2,1,tD.length,5).setValues(tD)}
       var jS = ss.getSheetByName("Journal Logs") || ss.insertSheet("Journal Logs"); jS.clear();
-      jS.appendRow(["Date","Mood","Energy","Bedtime","Wakeup","Sleep Quality","Wins","Improvement","Notes"]);
-      jS.getRange(1,1,1,9).setFontWeight("bold").setBackground("#e8f0fe");
+      jS.appendRow(["Date","Mood","Energy","Bedtime","Wakeup","Sleep Quality","Wins","Routines","Hard Parts","Anxiety Parking Lot","Improvement","Notes","Updated At"]);
+      jS.getRange(1,1,1,13).setFontWeight("bold").setBackground("#e8f0fe");
       var lD=Object.keys(d.logs).sort().reverse();
-      if(lD.length>0){var jD=lD.map(function(dt){var l=d.logs[dt];return[dt,l.mood||"",l.energy||"",l.sleepBedtime||"",l.sleepWakeup||"",l.sleepQuality||"",l.wins?l.wins.join(", "):"",l.improvement||"",l.journalNotes||""]});jS.getRange(2,1,jD.length,9).setValues(jD)}
+      if(lD.length>0){var jD=lD.map(function(dt){var l=d.logs[dt];var cN=[];if(l.completions){Object.keys(l.completions).forEach(function(hId){if(l.completions[hId]&&l.completions[hId].completed){var name=hId;for(var i=0;i<d.habits.length;i++){if(d.habits[i].id===hId){name=d.habits[i].name;break;}}cN.push(name)}})}return[dt,l.mood||"",l.energy||"",l.sleepBedtime||"",l.sleepWakeup||"",l.sleepQuality||"",l.wins?l.wins.join(", "):"",cN.join(", "),l.hard||"",l.anxiety||"",l.improvement||"",l.journalNotes||"",l.updatedAt?new Date(l.updatedAt).toLocaleString():""]});jS.getRange(2,1,jD.length,13).setValues(jD)}
       output.setContent(JSON.stringify({ status: 'success' })); return output;
     }
     output.setContent(JSON.stringify({ error: 'Invalid action' })); return output;
@@ -2794,7 +2912,6 @@ function doPost(e) {
 
         lucide.createIcons();
         this._setupListeners();
-        this._checkActiveConnection();
     },
 
     _setupListeners() {
@@ -2807,8 +2924,9 @@ function doPost(e) {
                 if (welcomeTitle) {
                     const hr = new Date().getHours();
                     let greet = 'Good morning';
-                    if (hr >= 12 && hr < 17) greet = 'Good afternoon';
-                    else if (hr >= 17) greet = 'Good evening';
+                    if (hr >= 10 && hr < 17) greet = 'Good afternoon';
+                    else if (hr >= 17 && hr < 21) greet = 'Good evening';
+                    else if (hr >= 21 || hr < 5) greet = 'Good night';
                     welcomeTitle.innerHTML = `${greet}, <span class="text-gradient">${name}</span>!`;
                 }
                 this._showToast("Username updated!");
@@ -2831,7 +2949,7 @@ function doPost(e) {
 
         // Export DB
         this.container.querySelector('#btn-export-db').addEventListener('click', () => {
-            const fullDb = { habits: db.habits, logs: db.logs, blueprints: db.blueprints, settings: db.settings };
+            const fullDb = { habits: db.habits, logs: db.logs, blueprints: db.blueprints, settings: db.settings, tasks: db.tasks };
             const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(fullDb, null, 2));
             const dlAnchor = document.createElement('a');
             dlAnchor.setAttribute("href", dataStr);
@@ -2855,6 +2973,10 @@ function doPost(e) {
                     db._save('habits', db.habits);
                     db._save('logs', db.logs);
                     db._save('blueprints', db.blueprints);
+                    if (imported.tasks) {
+                        db.tasks = imported.tasks;
+                        db._save('tasks', db.tasks);
+                    }
                     if (imported.settings) {
                         db.settings = imported.settings;
                         db._save('settings', db.settings);
@@ -2951,6 +3073,72 @@ function doPost(e) {
             db.saveSettings({ autoSync: e.target.checked });
             this._showToast("Auto-sync preferences saved.");
         });
+
+        // Proxy toggle checkbox listener
+        const proxyCheckbox = this.container.querySelector('#proxy-sync-checkbox');
+        if (proxyCheckbox) {
+            proxyCheckbox.addEventListener('change', (e) => {
+                db.saveSettings({ useNetlifyProxy: e.target.checked });
+                this._showToast(e.target.checked ? "Routing sync through Netlify Proxy." : "Routing sync directly to Google.");
+            });
+        }
+
+        // Enable Password Lock
+        const btnEnable = this.container.querySelector('#btn-enable-lock');
+        if (btnEnable) {
+            btnEnable.addEventListener('click', async () => {
+                const newPwd = this.container.querySelector('#new-password').value.trim();
+                const confPwd = this.container.querySelector('#confirm-password').value.trim();
+                if (!newPwd || !confPwd) {
+                    return alert("Please enter and confirm your password.");
+                }
+                if (newPwd !== confPwd) {
+                    return alert("Passwords do not match.");
+                }
+                const hash = await hashPassword(newPwd);
+                db.saveSettings({ passwordHash: hash });
+                this.updateView();
+                this._showToast("Password lock enabled!");
+                
+                // Show quick lock button
+                const btnLock = document.getElementById('btn-quick-lock');
+                if (btnLock) btnLock.style.display = 'flex';
+            });
+        }
+
+        // Disable Password Lock
+        const btnDisable = this.container.querySelector('#btn-disable-lock');
+        if (btnDisable) {
+            btnDisable.addEventListener('click', async () => {
+                const pwd = prompt("Enter current password to disable lock:");
+                if (pwd === null) return;
+                const enteredHash = await hashPassword(pwd.trim());
+                if (enteredHash === db.settings.passwordHash) {
+                    db.saveSettings({ passwordHash: '', lockTimeout: 0 });
+                    this.updateView();
+                    this._showToast("Password lock disabled.");
+                    
+                    // Hide quick lock button
+                    const btnLock = document.getElementById('btn-quick-lock');
+                    if (btnLock) btnLock.style.display = 'none';
+                } else {
+                    alert("Incorrect password.");
+                }
+            });
+        }
+
+        // Auto-Lock Timeout select
+        const timeoutSelect = this.container.querySelector('#lock-timeout-select');
+        if (timeoutSelect) {
+            timeoutSelect.addEventListener('change', (e) => {
+                const mins = parseInt(e.target.value);
+                db.saveSettings({ lockTimeout: mins });
+                this._showToast(`Auto-lock timeout updated.`);
+                if (window.globalAppInstance) {
+                    window.globalAppInstance.setupInactivityTimer();
+                }
+            });
+        }
     },
 
     _setupCollapsible(toggleId, contentId, chevronId) {
@@ -3041,6 +3229,8 @@ class AppShell {
             analytics: Analytics,
             settings: Settings
         };
+        this.isLocked = !!db.settings.passwordHash;
+        this.idleTimer = null;
     }
 
     async init() {
@@ -3048,9 +3238,17 @@ class AppShell {
         this.applyTheme();
         this.bindGlobalListeners();
         this.renderGlobalUI();
-        this.route();
+        
+        if (this.isLocked) {
+            this.showLockScreen();
+        } else {
+            this.route();
+            this.setupInactivityTimer();
+            this.runBackgroundSync();
+        }
+    }
 
-        // Background auto-pull from Google Sheets on start to prevent overwriting Claude's changes
+    async runBackgroundSync() {
         const settings = db.getSettings();
         if (settings.sheetsUrl && settings.autoSync) {
             try {
@@ -3064,6 +3262,316 @@ class AppShell {
             } catch (e) {
                 console.error("[AtomicFlow Sync] Background startup pull failed:", e);
             }
+        }
+    }
+
+    setupInactivityTimer() {
+        if (this.idleTimer) clearTimeout(this.idleTimer);
+        const settings = db.getSettings();
+        const timeoutMins = parseInt(settings.lockTimeout || 0);
+        if (timeoutMins <= 0 || this.isLocked) return;
+
+        const timeoutMs = timeoutMins * 60 * 1000;
+        this.idleTimer = setTimeout(() => {
+            console.log(`[AtomicFlow] Lock due to inactivity (${timeoutMins} min).`);
+            this.lock();
+        }, timeoutMs);
+        
+        localStorage.setItem('atomicflow_last_activity', Date.now().toString());
+    }
+
+    resetInactivityTimer() {
+        if (this.isLocked) return;
+        this.setupInactivityTimer();
+    }
+
+    checkInactivityOnFocus() {
+        if (this.isLocked) return;
+        const settings = db.getSettings();
+        const timeoutMins = parseInt(settings.lockTimeout || 0);
+        if (timeoutMins <= 0) return;
+
+        const lastActivityStr = localStorage.getItem('atomicflow_last_activity');
+        if (lastActivityStr) {
+            const lastActivity = parseInt(lastActivityStr);
+            const elapsedMs = Date.now() - lastActivity;
+            const timeoutMs = timeoutMins * 60 * 1000;
+            if (elapsedMs >= timeoutMs) {
+                console.log("[AtomicFlow] Lock due to elapsed inactivity on tab reactivation.");
+                this.lock();
+            } else {
+                if (this.idleTimer) clearTimeout(this.idleTimer);
+                this.idleTimer = setTimeout(() => this.lock(), timeoutMs - elapsedMs);
+            }
+        }
+    }
+
+    lock() {
+        if (this.isLocked) return;
+        this.isLocked = true;
+        if (this.idleTimer) clearTimeout(this.idleTimer);
+        this.showLockScreen();
+    }
+
+    unlock() {
+        this.isLocked = false;
+        this.hideLockScreen();
+        this.route();
+        this.setupInactivityTimer();
+        this.runBackgroundSync();
+    }
+
+    showLockScreen() {
+        const wrapper = document.querySelector('.app-wrapper');
+        if (wrapper) {
+            wrapper.style.filter = 'blur(20px)';
+            wrapper.style.pointerEvents = 'none';
+        }
+
+        let lockOverlay = document.getElementById('app-lock-screen');
+        if (lockOverlay) lockOverlay.remove();
+
+        lockOverlay = document.createElement('div');
+        lockOverlay.id = 'app-lock-screen';
+        lockOverlay.className = 'animate-fade-in';
+        lockOverlay.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: radial-gradient(circle at center, rgba(20, 20, 25, 0.96) 0%, rgba(10, 10, 12, 0.99) 100%);
+            backdrop-filter: blur(15px);
+            -webkit-backdrop-filter: blur(15px);
+            z-index: 999999;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: #ffffff;
+            font-family: var(--font-family);
+            padding: 2rem;
+            box-sizing: border-box;
+        `;
+
+        lockOverlay.innerHTML = `
+            <div class="lock-card" style="
+                max-width: 380px;
+                width: 100%;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                gap: 1.5rem;
+                text-align: center;
+                background: rgba(255, 255, 255, 0.03);
+                border: 1px solid rgba(255, 255, 255, 0.06);
+                border-radius: var(--radius-lg);
+                padding: 2.25rem 1.75rem;
+                box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+                backdrop-filter: blur(10px);
+                position: relative;
+            ">
+                <div style="display: flex; flex-direction: column; align-items: center; gap: 0.5rem;">
+                    <div style="
+                        width: 50px;
+                        height: 50px;
+                        border-radius: 50%;
+                        background: var(--grad-primary);
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        box-shadow: 0 0 20px rgba(184, 240, 100, 0.3);
+                        margin-bottom: 0.25rem;
+                    ">
+                        <i data-lucide="lock" style="width: 20px; height: 20px; color: #ffffff;"></i>
+                    </div>
+                    <h2 style="font-size: 1.35rem; font-weight: 600; margin: 0; display: flex; align-items: center; gap: 6px;">
+                        AtomicFlow
+                    </h2>
+                    <span style="font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1.5px; font-weight: 700;">
+                        App Locked
+                    </span>
+                </div>
+
+                <div style="width: 100%; display: flex; flex-direction: column; gap: 0.5rem;">
+                    <input type="password" id="lock-input" placeholder="Enter password" style="
+                        width: 100%;
+                        background: rgba(255, 255, 255, 0.05);
+                        border: 1px solid rgba(255, 255, 255, 0.1);
+                        border-radius: var(--radius-sm);
+                        color: #ffffff;
+                        padding: 0.65rem 1rem;
+                        font-size: 0.95rem;
+                        text-align: center;
+                        outline: none;
+                        transition: border-color 0.2s, box-shadow 0.2s;
+                        box-sizing: border-box;
+                    ">
+                    <div id="lock-error" style="color: #ff5252; font-size: 0.72rem; font-weight: 600; height: 14px; display: none;">
+                        Incorrect password
+                    </div>
+                </div>
+
+                <div class="lock-numpad" style="
+                    display: grid;
+                    grid-template-columns: repeat(3, 1fr);
+                    gap: 0.6rem;
+                    width: 100%;
+                    max-width: 280px;
+                ">
+                    ${[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => `
+                        <button class="numpad-btn" data-val="${n}" style="
+                            background: rgba(255, 255, 255, 0.03);
+                            border: 1px solid rgba(255, 255, 255, 0.05);
+                            border-radius: 50%;
+                            width: 54px;
+                            height: 54px;
+                            color: #ffffff;
+                            font-size: 1.25rem;
+                            font-weight: 500;
+                            cursor: pointer;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            justify-self: center;
+                            outline: none;
+                            transition: background 0.2s, transform 0.1s;
+                        ">${n}</button>
+                    `).join('')}
+                    <button class="numpad-btn numpad-clear" style="
+                        background: transparent;
+                        border: none;
+                        width: 54px;
+                        height: 54px;
+                        color: var(--text-muted);
+                        font-size: 0.78rem;
+                        font-weight: 600;
+                        cursor: pointer;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        justify-self: center;
+                        outline: none;
+                    ">Clear</button>
+                    <button class="numpad-btn" data-val="0" style="
+                        background: rgba(255, 255, 255, 0.03);
+                        border: 1px solid rgba(255, 255, 255, 0.05);
+                        border-radius: 50%;
+                        width: 54px;
+                        height: 54px;
+                        color: #ffffff;
+                        font-size: 1.25rem;
+                        font-weight: 500;
+                        cursor: pointer;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        justify-self: center;
+                        outline: none;
+                        transition: background 0.2s, transform 0.1s;
+                    ">0</button>
+                    <button class="numpad-btn numpad-back" style="
+                        background: transparent;
+                        border: none;
+                        width: 54px;
+                        height: 54px;
+                        color: var(--text-muted);
+                        cursor: pointer;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        justify-self: center;
+                        outline: none;
+                    "><i data-lucide="delete" style="width: 18px; height: 18px;"></i></button>
+                </div>
+
+                <button id="btn-unlock" class="btn btn-primary" style="
+                    width: 100%;
+                    padding: 0.65rem;
+                    border-radius: var(--radius-sm);
+                    font-size: 0.88rem;
+                    font-weight: 600;
+                    margin-top: 0.25rem;
+                ">Unlock Application</button>
+            </div>
+        `;
+
+        document.body.appendChild(lockOverlay);
+        lucide.createIcons();
+
+        const input = lockOverlay.querySelector('#lock-input');
+        if (window.innerWidth > 768) {
+            setTimeout(() => input.focus(), 100);
+        }
+
+        const numpadBtns = lockOverlay.querySelectorAll('.numpad-btn[data-val]');
+        numpadBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                input.value += btn.getAttribute('data-val');
+                input.dispatchEvent(new Event('input'));
+            });
+            btn.addEventListener('mousedown', () => btn.style.transform = 'scale(0.92)');
+            btn.addEventListener('mouseup', () => btn.style.transform = '');
+            btn.addEventListener('touchstart', () => btn.style.transform = 'scale(0.92)');
+            btn.addEventListener('touchend', () => btn.style.transform = '');
+        });
+
+        lockOverlay.querySelector('.numpad-clear').addEventListener('click', () => {
+            input.value = '';
+            input.dispatchEvent(new Event('input'));
+        });
+
+        lockOverlay.querySelector('.numpad-back').addEventListener('click', () => {
+            input.value = input.value.slice(0, -1);
+            input.dispatchEvent(new Event('input'));
+        });
+
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                this.handleUnlockAttempt();
+            }
+        });
+
+        lockOverlay.querySelector('#btn-unlock').addEventListener('click', () => {
+            this.handleUnlockAttempt();
+        });
+    }
+
+    async handleUnlockAttempt() {
+        const overlay = document.getElementById('app-lock-screen');
+        if (!overlay) return;
+
+        const input = overlay.querySelector('#lock-input');
+        const errorDiv = overlay.querySelector('#lock-error');
+        const card = overlay.querySelector('.lock-card');
+        const password = input.value;
+
+        const enteredHash = await hashPassword(password);
+        if (enteredHash === db.settings.passwordHash) {
+            this.unlock();
+        } else {
+            card.classList.add('shake-anim');
+            errorDiv.style.display = 'block';
+            input.value = '';
+            setTimeout(() => {
+                card.classList.remove('shake-anim');
+            }, 500);
+        }
+    }
+
+    hideLockScreen() {
+        const lockOverlay = document.getElementById('app-lock-screen');
+        if (lockOverlay) {
+            lockOverlay.classList.add('animate-fade-out');
+            setTimeout(() => {
+                lockOverlay.remove();
+            }, 300);
+        }
+
+        const wrapper = document.querySelector('.app-wrapper');
+        if (wrapper) {
+            wrapper.style.filter = '';
+            wrapper.style.pointerEvents = '';
         }
     }
 
@@ -3084,9 +3592,28 @@ class AppShell {
         navLinks.forEach(link => {
             link.addEventListener('click', (e) => {
                 e.preventDefault();
+                if (this.isLocked) return;
                 const view = link.getAttribute('data-view');
                 window.location.hash = `#${view}`;
             });
+        });
+
+        const quickLockBtn = document.getElementById('btn-quick-lock');
+        if (quickLockBtn) {
+            quickLockBtn.addEventListener('click', () => {
+                this.lock();
+            });
+        }
+
+        const activityEvents = ['mousemove', 'keydown', 'click', 'touchstart', 'scroll'];
+        activityEvents.forEach(evt => {
+            window.addEventListener(evt, () => this.resetInactivityTimer(), { passive: true });
+        });
+
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') {
+                this.checkInactivityOnFocus();
+            }
         });
     }
 
@@ -3097,8 +3624,9 @@ class AppShell {
         if (welcomeTitle) {
             const hr = new Date().getHours();
             let greeting = 'Good morning';
-            if (hr >= 12 && hr < 17) greeting = 'Good afternoon';
-            else if (hr >= 17) greeting = 'Good evening';
+            if (hr >= 10 && hr < 17) greeting = 'Good afternoon';
+            else if (hr >= 17 && hr < 21) greeting = 'Good evening';
+            else if (hr >= 21 || hr < 5) greeting = 'Good night';
             welcomeTitle.innerHTML = `${greeting}, <span class="text-gradient">${settings.userName || 'Achiever'}</span>!`;
         }
 
@@ -3111,6 +3639,13 @@ class AppShell {
                 day: 'numeric' 
             });
         }
+
+        // Lock button visibility
+        const btnLock = document.getElementById('btn-quick-lock');
+        if (btnLock) {
+            btnLock.style.display = settings.passwordHash ? 'flex' : 'none';
+        }
+
         this.updateSidebarStats();
     }
 
@@ -3159,6 +3694,7 @@ class AppShell {
     }
 
     route() {
+        if (this.isLocked) return;
         const hash = window.location.hash.substring(1) || 'dashboard';
         const activeView = this.views[hash];
 
@@ -3167,7 +3703,6 @@ class AppShell {
             return;
         }
 
-        // Silent auto-save if switching away from the journal reflection page
         if (this.currentView === Journal) {
             Journal.autoSaveCurrent();
         }

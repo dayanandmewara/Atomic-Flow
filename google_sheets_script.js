@@ -168,17 +168,35 @@ function doPost(e) {
         journalSheet = ss.insertSheet("Journal Logs");
       }
       journalSheet.clear();
-      var journalHeader = ["Date", "Mood", "Energy", "Bedtime", "Wakeup", "Sleep Quality", "Wins", "1% Improvement Target", "Journal Notes", "Updated At"];
+      var journalHeader = ["Date", "Mood", "Energy", "Bedtime", "Wakeup", "Sleep Quality", "Wins", "Completed Routines", "Hard Parts", "Anxiety Parking Lot", "1% Improvement Target", "Journal Notes", "Updated At"];
       journalSheet.appendRow(journalHeader);
       journalSheet.getRange(1, 1, 1, journalHeader.length).setFontWeight("bold").setBackground("#e8f0fe");
       
       var logs = dataToSave.logs;
       var logDates = Object.keys(logs).sort().reverse();
+      var habits = dataToSave.habits || [];
       if (logDates && logDates.length > 0) {
         var journalData = [];
         for (var k = 0; k < logDates.length; k++) {
           var date = logDates[k];
           var entry = logs[date];
+          
+          var completedNames = [];
+          if (entry.completions) {
+            Object.keys(entry.completions).forEach(function(hId) {
+              if (entry.completions[hId] && entry.completions[hId].completed) {
+                var hName = hId;
+                for (var hIdx = 0; hIdx < habits.length; hIdx++) {
+                  if (habits[hIdx].id === hId) {
+                    hName = habits[hIdx].name;
+                    break;
+                  }
+                }
+                completedNames.push(hName);
+              }
+            });
+          }
+
           journalData.push([
             date,
             entry.mood || "",
@@ -187,6 +205,9 @@ function doPost(e) {
             entry.sleepWakeup || "",
             entry.sleepQuality || "",
             entry.wins ? entry.wins.join(", ") : "",
+            completedNames.join(", "),
+            entry.hard || "",
+            entry.anxiety || "",
             entry.improvement || "",
             entry.journalNotes || "",
             entry.updatedAt ? new Date(entry.updatedAt).toLocaleString() : ""

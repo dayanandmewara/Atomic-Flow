@@ -40,11 +40,16 @@
         
         <!-- Left Sidebar Navigation -->
         <aside class="app-sidebar">
-            <div class="brand-section">
-                <div class="brand-icon">
-                    <i data-lucide="sparkles" style="width: 22px; height: 22px;"></i>
+            <div class="brand-section" style="width: 100%; display: flex; justify-content: space-between; align-items: center; box-sizing: border-box; padding-right: 1.25rem;">
+                <div style="display: flex; align-items: center; gap: 0.75rem;">
+                    <div class="brand-icon">
+                        <i data-lucide="sparkles" style="width: 22px; height: 22px;"></i>
+                    </div>
+                    <span class="brand-name">AtomicFlow</span>
                 </div>
-                <span class="brand-name">AtomicFlow</span>
+                <button id="btn-quick-lock" style="display: none; background: transparent; border: none; padding: 4px; cursor: pointer; color: var(--sidebar-text-muted); border-radius: 6px; align-items: center; justify-content: center;" title="Lock Application">
+                    <i data-lucide="lock" style="width: 15px; height: 15px;"></i>
+                </button>
             </div>
 
             <!-- Dynamic Sidebar Habit progress ring -->

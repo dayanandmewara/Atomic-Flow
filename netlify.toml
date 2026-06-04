@@ -4,3 +4,9 @@
 [[edge_functions]]
   path = "/mcp"
   function = "mcp"
+
+[[redirects]]
+  from = "/api/proxy"
+  to = "/.netlify/functions/proxy"
+  status = 200
+
