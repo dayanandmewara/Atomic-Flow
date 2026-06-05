@@ -29,6 +29,45 @@ async function hashPassword(password) {
     }
 }
 
+// Helper: Show global toast notification dynamically
+function showGlobalToast(msg, bg = 'linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%)', color = '#000') {
+    let toast = document.getElementById('global-app-toast');
+    if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'global-app-toast';
+        toast.className = 'glass-card animate-slide-up';
+        toast.style.position = 'fixed';
+        toast.style.bottom = '2rem';
+        toast.style.right = '2rem';
+        toast.style.padding = '0.75rem 1.5rem';
+        toast.style.borderRadius = 'var(--radius-sm)';
+        toast.style.boxShadow = '0 10px 25px rgba(245, 158, 11, 0.3)';
+        toast.style.zIndex = '100000';
+        toast.style.border = 'none';
+        toast.style.display = 'none';
+        document.body.appendChild(toast);
+    }
+    
+    toast.style.background = bg;
+    toast.style.color = color;
+    toast.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 8px; font-weight: 700;">
+            <span style="font-size: 1.2rem;">🪙</span>
+            <span>${msg}</span>
+        </div>
+    `;
+    
+    toast.style.display = 'block';
+    
+    if (window.globalToastTimeout) {
+        clearTimeout(window.globalToastTimeout);
+    }
+    
+    window.globalToastTimeout = setTimeout(() => {
+        toast.style.display = 'none';
+    }, 3500);
+}
+
 class DatabaseManager {
     constructor() {
         this.habits = this._load('habits') || [];
@@ -38,8 +77,17 @@ class DatabaseManager {
                 { id: '1', title: 'A clean, self-respecting person', proof: 'Keep a clean hygiene routine' },
                 { id: '2', title: 'An organized, mindful system designer', proof: 'Maintain arranged and tidy environment' }
             ],
-            stacks: []
+            stacks: [],
+            updatedAt: 0
         };
+        const defaultRewards = [
+            { id: 'r_show', name: 'Watch 1 hour of favorite show', cost: 10, icon: 'tv', system: true },
+            { id: 'r_game', name: 'Play 1 hour of video games', cost: 12, icon: 'gamepad-2', system: true },
+            { id: 'r_cheat', name: 'Enjoy a cheat meal or snack', cost: 15, icon: 'pizza', system: true },
+            { id: 'r_nap', name: 'Take a 30 min power nap', cost: 5, icon: 'moon', system: true },
+            { id: 'r_social', name: 'Scroll social media for 20 mins', cost: 5, icon: 'smartphone', system: true },
+            { id: 'r_coffee', name: 'Buy a specialty coffee/treat', cost: 8, icon: 'coffee', system: true }
+        ];
         const defaultSettings = {
             theme: 'dark', // Google dark theme default
             sheetsUrl: '',
@@ -51,6 +99,29 @@ class DatabaseManager {
             xp: 0
         };
         this.settings = { ...defaultSettings, ...(this._load('settings') || {}) };
+        
+        // Migrate legacy coins and rewards from settings to blueprints
+        if (this.settings.coins !== undefined && this.blueprints.coins === undefined) {
+            this.blueprints.coins = this.settings.coins;
+        }
+        if (this.settings.customRewards !== undefined && this.blueprints.customRewards === undefined) {
+            this.blueprints.customRewards = this.settings.customRewards;
+        }
+        if (this.settings.redeemedRewards !== undefined && this.blueprints.redeemedRewards === undefined) {
+            this.blueprints.redeemedRewards = this.settings.redeemedRewards;
+        }
+
+        // Initialize blueprints fields
+        if (this.blueprints.coins === undefined) {
+            this.blueprints.coins = 0;
+        }
+        if (!this.blueprints.customRewards) {
+            this.blueprints.customRewards = defaultRewards;
+        }
+        if (!this.blueprints.redeemedRewards) {
+            this.blueprints.redeemedRewards = [];
+        }
+
         this.tasks = this._load('tasks') || [];
 
         // V4: Ensure theme is migrated to dark mode once
@@ -187,30 +258,78 @@ class DatabaseManager {
 
     toggleHabitCompletion(dateStr, habitId, isTwoMinute = false) {
         const log = this.getLogForDate(dateStr);
-        let xpGained = 0;
+        let coinsGained = 0;
         let isChecking = true;
 
         if (log.completions[habitId] && log.completions[habitId].completed) {
             delete log.completions[habitId];
             isChecking = false;
-            xpGained = isTwoMinute ? -5 : -10;
+            coinsGained = -1;
         } else {
             log.completions[habitId] = {
                 completed: true,
                 isTwoMinute: isTwoMinute,
                 completedAt: Date.now()
             };
-            xpGained = isTwoMinute ? 5 : 10;
+            coinsGained = 1;
         }
         
         this.saveLogForDate(dateStr, log);
-        this.addXp(xpGained);
-        return { log, xpGained, isChecking };
+        this.addCoins(coinsGained);
+
+        // Check section completion bonus
+        const bonusResult = this.checkSectionBonus(dateStr, habitId, isChecking);
+        if (bonusResult.coinsGained !== 0) {
+            this.addCoins(bonusResult.coinsGained);
+            coinsGained += bonusResult.coinsGained;
+        }
+
+        return { 
+            log, 
+            coinsGained, 
+            isChecking, 
+            sectionCompleted: bonusResult.sectionCompleted,
+            sectionIncompleted: bonusResult.sectionIncompleted
+        };
     }
 
-    addXp(amount) {
-        this.settings.xp = Math.max(0, (this.settings.xp || 0) + amount);
-        this._save('settings', this.settings);
+    checkSectionBonus(dateStr, habitId, isChecking) {
+        const habit = this.habits.find(h => h.id === habitId);
+        if (!habit || !habit.timeOfDay || habit.timeOfDay === 'all') return { coinsGained: 0, sectionCompleted: null };
+
+        const section = habit.timeOfDay;
+        const log = this.getLogForDate(dateStr);
+        
+        const sectionHabits = this.getHabits().filter(h => h.timeOfDay === section);
+        if (sectionHabits.length === 0) return { coinsGained: 0, sectionCompleted: null };
+
+        if (!log.sectionBonuses) log.sectionBonuses = {};
+
+        if (isChecking) {
+            const allCompleted = sectionHabits.every(h => {
+                if (h.id === habitId) return true;
+                return log.completions[h.id] && log.completions[h.id].completed;
+            });
+
+            if (allCompleted && !log.sectionBonuses[section]) {
+                log.sectionBonuses[section] = true;
+                this.saveLogForDate(dateStr, log);
+                return { coinsGained: 3, sectionCompleted: section };
+            }
+        } else {
+            if (log.sectionBonuses[section]) {
+                log.sectionBonuses[section] = false;
+                this.saveLogForDate(dateStr, log);
+                return { coinsGained: -3, sectionIncompleted: section };
+            }
+        }
+        return { coinsGained: 0, sectionCompleted: null };
+    }
+
+    addCoins(amount) {
+        this.blueprints.coins = Math.max(0, (this.blueprints.coins || 0) + amount);
+        this.blueprints.updatedAt = Date.now();
+        this._save('blueprints', this.blueprints);
         
         const appShell = window.globalAppInstance;
         if (appShell) {
@@ -218,12 +337,17 @@ class DatabaseManager {
         }
     }
 
+    addXp(amount) {
+        // Legacy support
+        this.addCoins(Math.round(amount / 10) || 1);
+    }
+
     getBlueprints() {
         return this.blueprints;
     }
 
     saveBlueprints(blueprints) {
-        this.blueprints = { ...this.blueprints, ...blueprints };
+        this.blueprints = { ...this.blueprints, ...blueprints, updatedAt: Date.now() };
         this._save('blueprints', this.blueprints);
     }
 
@@ -237,6 +361,19 @@ class DatabaseManager {
             this.useProxy = !!newSettings.useNetlifyProxy;
         }
         this._save('settings', this.settings);
+    }
+
+    isPristine() {
+        const isBlueprintsDefault = this.blueprints.identities && this.blueprints.identities.length === 2 && 
+                                   this.blueprints.identities.some(i => i.id === '1') && 
+                                   this.blueprints.identities.some(i => i.id === '2') &&
+                                   (!this.blueprints.updatedAt || this.blueprints.updatedAt === 0);
+        
+        const hasOnlySampleHabits = this.habits.every(h => h.id === 'h_hygiene' || h.id === 'h_arranging');
+        
+        const hasNoTasks = this.tasks.length === 0;
+
+        return isBlueprintsDefault && hasOnlySampleHabits && hasNoTasks;
     }
 
     _seedSampleData() {
@@ -306,7 +443,9 @@ class DatabaseManager {
             };
         }
         this._save('logs', this.logs);
-        this.settings.xp = 220;
+        this.blueprints.coins = 20;
+        this.blueprints.updatedAt = Date.now();
+        this._save('blueprints', this.blueprints);
         this.settings.theme = 'dark'; // Force dark theme for clean Google-style dark mode by default
         this._save('settings', this.settings);
     }
@@ -386,7 +525,7 @@ class DatabaseManager {
         }
     }
 
-    async pullFromGoogleSheets() {
+    async pullFromGoogleSheets(forceOverwrite = false) {
         const url = this.settings.sheetsUrl;
         if (!url) return false;
 
@@ -400,22 +539,7 @@ class DatabaseManager {
                 if (!res.ok) throw new Error(`Proxy Pull HTTP Error ${res.status}`);
                 const data = await res.json();
                 
-                if (data.habits) {
-                    this.habits = data.habits;
-                    this._save('habits', this.habits);
-                }
-                if (data.logs) {
-                    this.logs = data.logs;
-                    this._save('logs', this.logs);
-                }
-                if (data.blueprints) {
-                    this.blueprints = data.blueprints;
-                    this._save('blueprints', this.blueprints);
-                }
-                if (data.tasks) {
-                    this.tasks = data.tasks;
-                    this._save('tasks', this.tasks);
-                }
+                this.mergeDatabase(data, forceOverwrite);
                 return true;
             } catch (e) {
                 console.error("Failed to pull data via proxy:", e);
@@ -429,27 +553,142 @@ class DatabaseManager {
             if (!res.ok) throw new Error(`HTTP Error ${res.status}`);
             const data = await res.json();
             
-            if (data.habits) {
-                this.habits = data.habits;
-                this._save('habits', this.habits);
-            }
-            if (data.logs) {
-                this.logs = data.logs;
-                this._save('logs', this.logs);
-            }
-            if (data.blueprints) {
-                this.blueprints = data.blueprints;
-                this._save('blueprints', this.blueprints);
-            }
-            if (data.tasks) {
-                this.tasks = data.tasks;
-                this._save('tasks', this.tasks);
-            }
+            this.mergeDatabase(data, forceOverwrite);
             return true;
         } catch (e) {
             console.error("Failed to pull data:", e);
             throw e;
         }
+    }
+
+    mergeDatabase(cloudData, forceOverwrite = false) {
+        if (!cloudData) return false;
+
+        const isPristine = this.isPristine();
+
+        if (forceOverwrite || isPristine) {
+            console.log("[AtomicFlow Sync] Pristine/Force Overwrite. Replacing local database with cloud. Pristine:", isPristine, "Force:", forceOverwrite);
+            
+            let databaseModified = false;
+            
+            if (Array.isArray(cloudData.habits)) {
+                this.habits = cloudData.habits;
+                localStorage.setItem(DB_PREFIX + 'habits', JSON.stringify(this.habits));
+                databaseModified = true;
+            }
+            if (Array.isArray(cloudData.tasks)) {
+                this.tasks = cloudData.tasks;
+                localStorage.setItem(DB_PREFIX + 'tasks', JSON.stringify(this.tasks));
+                databaseModified = true;
+            }
+            if (cloudData.blueprints) {
+                this.blueprints = cloudData.blueprints;
+                localStorage.setItem(DB_PREFIX + 'blueprints', JSON.stringify(this.blueprints));
+                databaseModified = true;
+            }
+            if (cloudData.logs) {
+                this.logs = cloudData.logs;
+                localStorage.setItem(DB_PREFIX + 'logs', JSON.stringify(this.logs));
+                databaseModified = true;
+            }
+            return databaseModified;
+        }
+
+        let localModified = false;
+
+        // 1. Merge Habits
+        if (Array.isArray(cloudData.habits)) {
+            const mergedHabits = [...this.habits];
+            cloudData.habits.forEach(cloudHabit => {
+                const localIndex = mergedHabits.findIndex(h => h.id === cloudHabit.id);
+                if (localIndex !== -1) {
+                    const localHabit = mergedHabits[localIndex];
+                    const localTime = localHabit.updatedAt || localHabit.createdAt || 0;
+                    const cloudTime = cloudHabit.updatedAt || cloudHabit.createdAt || 0;
+                    if (cloudTime > localTime) {
+                        mergedHabits[localIndex] = cloudHabit;
+                        localModified = true;
+                    }
+                } else {
+                    mergedHabits.push(cloudHabit);
+                    localModified = true;
+                }
+            });
+            this.habits = mergedHabits;
+            if (localModified) {
+                localStorage.setItem(DB_PREFIX + 'habits', JSON.stringify(this.habits));
+            }
+        }
+
+        // 2. Merge Tasks
+        if (Array.isArray(cloudData.tasks)) {
+            let tasksModified = false;
+            const mergedTasks = [...this.tasks];
+            cloudData.tasks.forEach(cloudTask => {
+                const localIndex = mergedTasks.findIndex(t => t.id === cloudTask.id);
+                if (localIndex !== -1) {
+                    const localTask = mergedTasks[localIndex];
+                    const localTime = localTask.updatedAt || localTask.createdAt || 0;
+                    const cloudTime = cloudTask.updatedAt || cloudTask.createdAt || 0;
+                    if (cloudTime > localTime) {
+                        mergedTasks[localIndex] = cloudTask;
+                        tasksModified = true;
+                    }
+                } else {
+                    mergedTasks.push(cloudTask);
+                    tasksModified = true;
+                }
+            });
+            this.tasks = mergedTasks;
+            if (tasksModified) {
+                localStorage.setItem(DB_PREFIX + 'tasks', JSON.stringify(this.tasks));
+                localModified = true;
+            }
+        }
+
+        // 3. Merge Blueprints
+        if (cloudData.blueprints) {
+            const cloudBlueprints = cloudData.blueprints;
+            const localTime = this.blueprints.updatedAt || 0;
+            const cloudTime = cloudBlueprints.updatedAt || 0;
+            
+            const isLocalDefault = this.blueprints.identities && this.blueprints.identities.length === 2 && 
+                                   this.blueprints.identities.some(i => i.id === '1') && 
+                                   this.blueprints.identities.some(i => i.id === '2') &&
+                                   (!this.blueprints.updatedAt || this.blueprints.updatedAt === 0);
+            
+            if (cloudTime > localTime || (isLocalDefault && cloudData.updatedAt)) {
+                this.blueprints = cloudBlueprints;
+                localStorage.setItem(DB_PREFIX + 'blueprints', JSON.stringify(this.blueprints));
+                localModified = true;
+            }
+        }
+
+        // 4. Merge Logs
+        if (cloudData.logs) {
+            let logsModified = false;
+            Object.keys(cloudData.logs).forEach(dateStr => {
+                const cloudLog = cloudData.logs[dateStr];
+                const localLog = this.logs[dateStr];
+                if (localLog) {
+                    const localTime = localLog.updatedAt || 0;
+                    const cloudTime = cloudLog.updatedAt || 0;
+                    if (cloudTime > localTime) {
+                        this.logs[dateStr] = cloudLog;
+                        logsModified = true;
+                    }
+                } else {
+                    this.logs[dateStr] = cloudLog;
+                    logsModified = true;
+                }
+            });
+            if (logsModified) {
+                localStorage.setItem(DB_PREFIX + 'logs', JSON.stringify(this.logs));
+                localModified = true;
+            }
+        }
+
+        return localModified;
     }
 }
 
@@ -890,7 +1129,10 @@ const Dashboard = {
                                     ⚡ ${isTwoMinuteSelected ? 'Normal Mode' : '2-Min Version'}
                                 </button>
                             ` : '<span></span>'}
-                            <button class="btn btn-secondary btn-delete-habit" style="padding: 0.2rem 0.5rem; font-size: 0.68rem; border-color: rgba(239,68,68,0.15); color: #ef4444;"><i data-lucide="trash-2" style="width: 10px; height: 10px;"></i> Delete</button>
+                            <div style="display: flex; gap: 6px;">
+                                <button class="btn btn-secondary btn-edit-habit" style="padding: 0.2rem 0.5rem; font-size: 0.68rem; border-color: rgba(99,102,241,0.15); color: var(--primary);"><i data-lucide="edit-3" style="width: 10px; height: 10px;"></i> Edit</button>
+                                <button class="btn btn-secondary btn-delete-habit" style="padding: 0.2rem 0.5rem; font-size: 0.68rem; border-color: rgba(239,68,68,0.15); color: #ef4444;"><i data-lucide="trash-2" style="width: 10px; height: 10px;"></i> Delete</button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -974,7 +1216,7 @@ const Dashboard = {
                         </select>
                     </div>
 
-                    <button type="submit" class="btn btn-primary" style="padding: 0.45rem 1rem; font-size: 0.8rem; border-radius: 12px; font-weight: 600; margin-top: 0.25rem;"><i data-lucide="moon"></i> Save Log & +20 XP</button>
+                    <button type="submit" class="btn btn-primary" style="padding: 0.45rem 1rem; font-size: 0.8rem; border-radius: 12px; font-weight: 600; margin-top: 0.25rem;"><i data-lucide="moon"></i> Save Log & +2 Coins 🪙</button>
                 </form>
             `;
         }
@@ -1063,6 +1305,14 @@ const Dashboard = {
                     }
                 });
             }
+
+            const editBtn = card.querySelector('.btn-edit-habit');
+            if (editBtn) {
+                editBtn.addEventListener('click', () => {
+                    const hId = card.getAttribute('data-id');
+                    this.showHabitEditModal(hId);
+                });
+            }
         });
 
         cards.forEach(card => {
@@ -1103,8 +1353,16 @@ const Dashboard = {
                     card.classList.remove('completed');
                 }
 
-                const { xpGained, isChecking } = db.toggleHabitCompletion(this.selectedDate, habitId, isTwoMinute);
-                this._floatXpNotification(card, xpGained, isChecking);
+                const { coinsGained, isChecking, sectionCompleted } = db.toggleHabitCompletion(this.selectedDate, habitId, isTwoMinute);
+                this._floatCoinNotification(card, coinsGained, isChecking);
+
+                if (sectionCompleted) {
+                    setTimeout(() => {
+                        this._playConfetti();
+                        const sectionName = sectionCompleted.charAt(0).toUpperCase() + sectionCompleted.slice(1);
+                        showGlobalToast(`${sectionName} routines completed! +3 Coins Bonus! 🪙`);
+                    }, 500);
+                }
 
                 setTimeout(() => {
                     this.updateView();
@@ -1128,7 +1386,7 @@ const Dashboard = {
 
                 db.saveLogForDate(this.selectedDate, currentLog);
                 
-                db.addXp(20);
+                db.addCoins(2);
                 this._playConfetti();
                 
                 this.updateView();
@@ -1164,11 +1422,11 @@ const Dashboard = {
 
     },
 
-    _floatXpNotification(card, amount, isChecking) {
+    _floatCoinNotification(card, amount, isChecking) {
         if (amount === 0) return;
         
         const floatSpan = document.createElement('span');
-        floatSpan.innerText = isChecking ? `+${amount} XP 🔥` : `${amount} XP ❄️`;
+        floatSpan.innerText = isChecking ? `+${amount} Coin${amount > 1 ? 's' : ''} 🪙` : `-${Math.abs(amount)} Coin${Math.abs(amount) > 1 ? 's' : ''} 🪙`;
         floatSpan.style.position = 'absolute';
         floatSpan.style.top = '10px';
         floatSpan.style.right = '40px';
@@ -1207,6 +1465,140 @@ const Dashboard = {
                 colors: ['#b8f064', '#8fd43a', '#f5b942', '#f06464']
             });
         }
+    },
+
+    showHabitEditModal(habitId) {
+        const habit = db.getHabits().find(h => h.id === habitId);
+        if (!habit) return;
+
+        const blueprints = db.getBlueprints();
+        
+        const modal = document.createElement('div');
+        modal.id = 'habit-edit-modal';
+        modal.className = 'glass-card';
+        modal.style.position = 'fixed';
+        modal.style.top = '50%';
+        modal.style.left = '50%';
+        modal.style.transform = 'translate(-50%, -50%)';
+        modal.style.width = '90%';
+        modal.style.maxWidth = '500px';
+        modal.style.zIndex = '100001';
+        modal.style.padding = '1.5rem';
+        modal.style.borderRadius = 'var(--radius-md)';
+        modal.style.boxShadow = 'var(--glass-shadow)';
+        modal.style.border = '1px solid var(--border-color)';
+        modal.style.background = 'var(--bg-primary)';
+
+        const backdrop = document.createElement('div');
+        backdrop.id = 'habit-edit-backdrop';
+        backdrop.style.position = 'fixed';
+        backdrop.style.top = '0';
+        backdrop.style.left = '0';
+        backdrop.style.width = '100%';
+        backdrop.style.height = '100%';
+        backdrop.style.background = 'rgba(0, 0, 0, 0.6)';
+        backdrop.style.backdropFilter = 'blur(8px)';
+        backdrop.style.zIndex = '100000';
+
+        modal.innerHTML = `
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem;">
+                <h3 style="font-size: 1.1rem; font-weight: 600; display: flex; align-items: center; gap: 6px; color: var(--text-primary);">
+                    <i data-lucide="edit-3" style="color: var(--primary); width: 18px; height: 18px;"></i> Edit Habit
+                </h3>
+                <button id="btn-close-edit-modal" style="background: transparent; border: none; color: var(--text-muted); cursor: pointer; padding: 4px;"><i data-lucide="x" style="width: 18px; height: 18px;"></i></button>
+            </div>
+            
+            <form id="edit-habit-form" style="display: flex; flex-direction: column; gap: 0.85rem; max-height: 70vh; overflow-y: auto; padding-right: 4px;">
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label style="font-size: 0.75rem; font-weight: 600;">Habit Name</label>
+                    <input type="text" id="edit-habit-name" class="form-control" style="font-size: 0.82rem; padding: 0.45rem 0.65rem;" value="${habit.name}" required>
+                </div>
+
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label style="font-size: 0.75rem; font-weight: 600;">Identity Pillar</label>
+                    <select id="edit-habit-identity" class="form-control" style="font-size: 0.82rem; padding: 0.45rem 0.65rem;" required>
+                        ${blueprints.identities.map(id => `<option value="${id.title}" ${habit.identity === id.title ? 'selected' : ''}>${id.title}</option>`).join('') || '<option value="">(Create an Identity Pillar first!)</option>'}
+                    </select>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label style="font-size: 0.75rem; font-weight: 600;">Color/Category</label>
+                        <select id="edit-habit-category" class="form-control" style="font-size: 0.82rem; padding: 0.45rem 0.65rem;">
+                            <option value="health" ${habit.category === 'health' ? 'selected' : ''}>Health (Green)</option>
+                            <option value="mind" ${habit.category === 'mind' ? 'selected' : ''}>Mind (Blue)</option>
+                            <option value="career" ${habit.category === 'career' ? 'selected' : ''}>Career (Purple)</option>
+                            <option value="other" ${habit.category === 'other' ? 'selected' : ''}>General (Orange)</option>
+                        </select>
+                    </div>
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label style="font-size: 0.75rem; font-weight: 600;">Timing</label>
+                        <select id="edit-habit-time" class="form-control" style="font-size: 0.82rem; padding: 0.45rem 0.65rem;">
+                            <option value="morning" ${habit.timeOfDay === 'morning' ? 'selected' : ''}>Morning</option>
+                            <option value="daytime" ${habit.timeOfDay === 'daytime' ? 'selected' : ''}>Daytime</option>
+                            <option value="evening" ${habit.timeOfDay === 'evening' ? 'selected' : ''}>Evening</option>
+                            <option value="night" ${habit.timeOfDay === 'night' ? 'selected' : ''}>Night</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label style="font-size: 0.75rem; font-weight: 600;">Habit Stack Trigger</label>
+                    <input type="text" id="edit-habit-trigger" class="form-control" style="font-size: 0.82rem; padding: 0.45rem 0.65rem;" value="${habit.stackTrigger || ''}" required>
+                </div>
+
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label style="font-size: 0.75rem; font-weight: 600;">Obvious Cue</label>
+                    <input type="text" id="edit-habit-cue" class="form-control" style="font-size: 0.82rem; padding: 0.45rem 0.65rem;" value="${habit.cue || ''}" required>
+                </div>
+
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label style="font-size: 0.75rem; font-weight: 600;">2-Minute Version</label>
+                    <input type="text" id="edit-habit-twomin" class="form-control" style="font-size: 0.82rem; padding: 0.45rem 0.65rem;" value="${habit.twoMinuteVersion || ''}" required>
+                </div>
+
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label style="font-size: 0.75rem; font-weight: 600;">Immediate Reward</label>
+                    <input type="text" id="edit-habit-reward" class="form-control" style="font-size: 0.82rem; padding: 0.45rem 0.65rem;" value="${habit.reward || ''}" required>
+                </div>
+
+                <button type="submit" class="btn btn-primary" style="margin-top: 0.5rem; padding: 0.5rem 1.25rem; font-size: 0.82rem; border-radius: 12px; font-weight: 600;"><i data-lucide="check"></i> Save Changes</button>
+            </form>
+        `;
+
+        document.body.appendChild(backdrop);
+        document.body.appendChild(modal);
+        lucide.createIcons();
+
+        const closeModal = () => {
+            modal.remove();
+            backdrop.remove();
+        };
+
+        backdrop.addEventListener('click', closeModal);
+        modal.querySelector('#btn-close-edit-modal').addEventListener('click', closeModal);
+
+        modal.querySelector('#edit-habit-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const updatedHabit = {
+                id: habitId,
+                name: modal.querySelector('#edit-habit-name').value.trim(),
+                identity: modal.querySelector('#edit-habit-identity').value,
+                category: modal.querySelector('#edit-habit-category').value,
+                timeOfDay: modal.querySelector('#edit-habit-time').value,
+                stackTrigger: modal.querySelector('#edit-habit-trigger').value.trim(),
+                cue: modal.querySelector('#edit-habit-cue').value.trim(),
+                twoMinuteVersion: modal.querySelector('#edit-habit-twomin').value.trim(),
+                reward: modal.querySelector('#edit-habit-reward').value.trim()
+            };
+
+            db.saveHabit(updatedHabit);
+            closeModal();
+            showGlobalToast("Habit updated successfully!");
+            
+            this.updateView();
+            this._updateSidebarProgress();
+        });
     }
 };
 
@@ -1279,7 +1671,7 @@ const Journal = {
     },
 
     updateView(log) {
-        // V5 Enhanced Journal: Retrieve active habits and calculate compliance list
+        // V6 Redesigned Journal: Single-column, reflection-first, ultra compact
         const habits = db.getHabits();
         const completions = log.completions || {};
         let completedCount = 0;
@@ -1289,17 +1681,17 @@ const Journal = {
             const isDone = completions[h.id] && completions[h.id].completed;
             if (isDone) completedCount++;
             return `
-                <div style="display: flex; align-items: center; justify-content: space-between; font-size: 0.82rem; padding: 6px 0; border-bottom: 1px dashed var(--border-color);">
-                    <div style="display: flex; align-items: center; gap: 8px; color: ${isDone ? 'var(--text-primary)' : 'var(--text-secondary)'};">
-                        <i data-lucide="${isDone ? 'check-circle-2' : 'circle'}" style="width: 14px; height: 14px; color: ${isDone ? 'var(--color-success)' : 'var(--text-muted)'};"></i>
-                        <span style="${isDone ? '' : 'color: var(--text-muted);'}">${h.name}</span>
+                <div style="display: flex; align-items: center; justify-content: space-between; font-size: 0.78rem; padding: 4px 0; border-bottom: 1px dashed var(--border-color);">
+                    <div style="display: flex; align-items: center; gap: 6px; color: ${isDone ? 'var(--text-primary)' : 'var(--text-muted)'};">
+                        <i data-lucide="${isDone ? 'check-circle-2' : 'circle'}" style="width: 13px; height: 13px; color: ${isDone ? 'var(--color-success)' : 'var(--text-muted)'}; flex-shrink: 0;"></i>
+                        <span>${h.name}</span>
                     </div>
-                    <span style="font-size: 0.72rem; color: var(--text-muted); font-weight: 500;">
-                        ${isDone ? '<span style="color: var(--color-success); font-weight: 600;">+10 XP</span>' : 'Pending'}
+                    <span style="font-size: 0.68rem; color: ${isDone ? 'var(--color-success)' : 'var(--text-muted)'}; font-weight: 600; flex-shrink: 0;">
+                        ${isDone ? '+1 Coin 🪙' : '—'}
                     </span>
                 </div>
             `;
-        }).join('') || `<div style="font-size: 0.8rem; color: var(--text-muted); text-align: center; font-style: italic; padding: 0.5rem 0;">No active habits set for this day.</div>`;
+        }).join('') || `<div style="font-size: 0.78rem; color: var(--text-muted); text-align: center; font-style: italic; padding: 0.35rem 0;">No habits tracked.</div>`;
 
         const winsText = Array.isArray(log.wins) ? log.wins.join('\n') : (log.wins || '');
         const hardText = log.hard || '';
@@ -1307,129 +1699,159 @@ const Journal = {
         const tomorrowText = log.tomorrow || log.improvement || '';
         const freeText = log.journalNotes || log.free || '';
 
+        // Calculate journaling streak
+        let journalStreak = 0;
+        const today = new Date();
+        for (let i = 0; i < 365; i++) {
+            const d = new Date(today);
+            d.setDate(d.getDate() - i);
+            const dStr = d.toISOString().split('T')[0];
+            const dayLog = db.logs[dStr];
+            if (dayLog && (dayLog.mood > 0 || dayLog.wins?.length > 0 || dayLog.hard || dayLog.journalNotes)) {
+                journalStreak++;
+            } else {
+                break;
+            }
+        }
+
+        // Is today logged?
+        const isTodayLogged = this.selectedDate === new Date().toISOString().split('T')[0] && (log.mood > 0 || (log.wins && log.wins.length > 0));
+
+        const moodLabels = ['', 'Rough', 'Meh', 'Okay', 'Good', 'Great'];
+        const energyLabels = ['', 'Drained', 'Low', 'Balanced', 'Charged', 'Peak'];
+
         this.container.innerHTML = `
-            <div class="animate-fade-in" style="width: 100%; box-sizing: border-box;">
-                <div class="view-grid">
-                    <!-- Left: Mood & Energy Tracker -->
-                    <div class="column-sidebar" style="grid-column: span 5; display: flex; flex-direction: column; gap: 1.5rem; width: 100%; box-sizing: border-box;">
-                        
-                        <!-- Date selector with chevrons -->
-                        <div class="glass-card" style="padding: 1.25rem; border-radius: var(--radius-md); width: 100%; box-sizing: border-box;">
-                            <div style="display: flex; justify-content: space-between; align-items: center;">
-                                <label style="font-weight: 500; font-size: 0.9rem; color: var(--text-primary);">Log Entry Date</label>
-                                <div style="display: flex; align-items: center; gap: 0.25rem;">
-                                    <button class="btn btn-secondary" id="btn-prev-journal-day" style="padding: 0.3rem 0.5rem; border: none; background: transparent;"><i data-lucide="chevron-left" style="width: 16px; height: 16px;"></i></button>
-                                    <input type="date" id="journal-date-picker" class="form-control" value="${this.selectedDate}" style="width: 130px; border-radius: 16px; padding: 0.3rem 0.5rem; font-size: 0.85rem; height: auto; text-align: center; border: 1px solid var(--border-color);">
-                                    <button class="btn btn-secondary" id="btn-next-journal-day" style="padding: 0.3rem 0.5rem; border: none; background: transparent;"><i data-lucide="chevron-right" style="width: 16px; height: 16px;"></i></button>
-                                </div>
-                            </div>
-                        </div>
+            <div class="animate-fade-in" style="width: 100%; box-sizing: border-box; max-width: 680px; margin: 0 auto;">
 
-                        <!-- Mood Card -->
-                        <div class="glass-card" style="border-radius: var(--radius-md); padding: 1.25rem; width: 100%; box-sizing: border-box;">
-                            <h3 class="card-title" style="margin-bottom: 1rem; font-weight: 500; font-size: 0.95rem;">
-                                <i data-lucide="smile" style="color: var(--primary); width: 18px; height: 18px;"></i> How are you feeling right now?
-                            </h3>
-                            <div class="mood-picker" id="mood-row">
-                                <button class="mood-btn ${this.activeMood === 1 ? 'sel' : ''}" data-mood="1">😔</button>
-                                <button class="mood-btn ${this.activeMood === 2 ? 'sel' : ''}" data-mood="2">😐</button>
-                                <button class="mood-btn ${this.activeMood === 3 ? 'sel' : ''}" data-mood="3">🙂</button>
-                                <button class="mood-btn ${this.activeMood === 4 ? 'sel' : ''}" data-mood="4">😊</button>
-                                <button class="mood-btn ${this.activeMood === 5 ? 'sel' : ''}" data-mood="5">😄</button>
-                            </div>
-                        </div>
-
-                        <!-- Energy Card -->
-                        <div class="glass-card" style="border-radius: var(--radius-md); padding: 1.25rem; width: 100%; box-sizing: border-box;">
-                            <h3 class="card-title" style="margin-bottom: 1rem; font-weight: 500; font-size: 0.95rem;">
-                                <i data-lucide="zap" style="color: var(--color-warning); width: 18px; height: 18px;"></i> Energy level today
-                            </h3>
-                            <div class="energy-picker" id="nrg-row">
-                                <button class="energy-btn ${this.activeEnergy === 1 ? 'sel' : ''}" data-energy="1">1</button>
-                                <button class="energy-btn ${this.activeEnergy === 2 ? 'sel' : ''}" data-energy="2">2</button>
-                                <button class="energy-btn ${this.activeEnergy === 3 ? 'sel' : ''}" data-energy="3">3</button>
-                                <button class="energy-btn ${this.activeEnergy === 4 ? 'sel' : ''}" data-energy="4">4</button>
-                                <button class="energy-btn ${this.activeEnergy === 5 ? 'sel' : ''}" data-energy="5">5</button>
-                            </div>
-                            <div style="display: flex; justify-content: space-between; font-size: 0.72rem; color: var(--text-muted); font-weight: 600; margin-top: 6px; padding: 0 4px;">
-                                <span>1 (Exhausted)</span>
-                                <span>3 (Balanced)</span>
-                                <span>5 (Peak)</span>
-                            </div>
-                        </div>
-
-                        <!-- Today's Habit Compliance Panel -->
-                        <div class="glass-card" style="border-radius: var(--radius-md); padding: 1.25rem; width: 100%; box-sizing: border-box;">
-                            <h3 class="card-title" style="margin-bottom: 0.75rem; font-weight: 500; font-size: 0.95rem; display: flex; justify-content: space-between; align-items: center;">
-                                <span style="display: flex; align-items: center; gap: 6px;"><i data-lucide="check-square" style="color: var(--primary); width: 18px; height: 18px;"></i> Routine Compliance</span>
-                                <span style="font-size: 0.75rem; font-weight: 700; background: var(--sidebar-active-bg); color: var(--primary); padding: 2px 8px; border-radius: 12px;">${completedCount} / ${totalCount} Done</span>
-                            </h3>
-                            <p style="font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 1rem;">Routines checked off on this day. Consistently keeping to systems yields better energy and mood!</p>
-                            <div style="display: flex; flex-direction: column; gap: 4px;">
-                                ${habitSummaryHtml}
-                            </div>
-                        </div>
+                <!-- Date Nav + Streak Row -->
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; flex-wrap: wrap; gap: 0.5rem;">
+                    <div style="display: flex; align-items: center; gap: 0.25rem;">
+                        <button class="btn btn-secondary" id="btn-prev-journal-day" style="padding: 0.3rem 0.4rem; border: none; background: transparent;"><i data-lucide="chevron-left" style="width: 16px; height: 16px;"></i></button>
+                        <input type="date" id="journal-date-picker" class="form-control" value="${this.selectedDate}" style="width: 130px; border-radius: 16px; padding: 0.3rem 0.5rem; font-size: 0.82rem; height: auto; text-align: center; border: 1px solid var(--border-color);">
+                        <button class="btn btn-secondary" id="btn-next-journal-day" style="padding: 0.3rem 0.4rem; border: none; background: transparent;"><i data-lucide="chevron-right" style="width: 16px; height: 16px;"></i></button>
                     </div>
+                    <div style="display: flex; align-items: center; gap: 0.65rem;">
+                        ${journalStreak > 0 ? `
+                            <span style="font-size: 0.72rem; font-weight: 700; color: var(--primary); display: flex; align-items: center; gap: 3px;">
+                                <i data-lucide="flame" style="width: 13px; height: 13px;"></i> ${journalStreak}-day streak
+                            </span>
+                        ` : ''}
+                        <button class="btn btn-primary" id="btn-save-journal" style="padding: 0.4rem 1rem; font-size: 0.78rem; border-radius: 16px;">
+                            <i data-lucide="save" style="width: 13px; height: 13px;"></i> Save
+                        </button>
+                    </div>
+                </div>
 
-                    <!-- Right: Reflections -->
-                    <div class="column-main" style="grid-column: span 7; display: flex; flex-direction: column; gap: 1.5rem; width: 100%; box-sizing: border-box;">
-                        <div class="glass-card" style="padding: 1.5rem 1.75rem; border-radius: var(--radius-md); width: 100%; box-sizing: border-box;">
-                            <div class="card-header-flex" style="border-bottom: 1px solid var(--border-color); padding-bottom: 1rem; margin-bottom: 1.25rem;">
-                                <div>
-                                    <h3 class="card-title" style="font-weight: 500; font-size: 1.15rem;"><i data-lucide="book-open" style="color: var(--primary); width: 20px; height: 20px;"></i> Daily Reflection</h3>
-                                    <p class="card-subtitle" style="font-size: 0.8rem;">Keep an atomic record of wins. XP awarded on save!</p>
-                                </div>
-                                <button class="btn btn-primary" id="btn-save-journal" style="padding: 0.5rem 1.25rem; font-size: 0.82rem; border-radius: 16px;">
-                                    <i data-lucide="save" style="width: 14px; height: 14px;"></i> Save Log
-                                </button>
+                <!-- Mood + Energy Compact Inline -->
+                <div class="glass-card" style="padding: 0.75rem 1rem; border-radius: var(--radius-md); margin-bottom: 0.75rem;">
+                    <div style="display: flex; gap: 1rem; align-items: stretch; flex-wrap: wrap;">
+                        <!-- Mood -->
+                        <div style="flex: 1; min-width: 150px;">
+                            <div style="font-size: 0.72rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 0.4rem; display: flex; align-items: center; gap: 4px;">
+                                <i data-lucide="smile" style="width: 12px; height: 12px; color: var(--primary);"></i>
+                                Mood
+                                <span id="mood-label" style="color: var(--text-muted); font-weight: 500; margin-left: auto;">${this.activeMood > 0 ? moodLabels[this.activeMood] : '—'}</span>
                             </div>
-
-                            <div class="form-group" style="margin-bottom: 1.25rem;">
-                                <label style="font-size: 0.8rem;">Today's win 🏆</label>
-                                <textarea class="form-control" id="j-wins" placeholder="What went well? Any habit that felt automatic?" style="border-radius: 8px; padding: 0.65rem 0.75rem; font-size: 0.85rem; width: 100%; min-height: 80px; resize: vertical;">${winsText}</textarea>
+                            <div class="mood-picker" id="mood-row" style="margin-bottom: 0; gap: 0.3rem;">
+                                <button class="mood-btn ${this.activeMood === 1 ? 'sel' : ''}" data-mood="1" style="padding: 6px 2px; font-size: 18px;">😔</button>
+                                <button class="mood-btn ${this.activeMood === 2 ? 'sel' : ''}" data-mood="2" style="padding: 6px 2px; font-size: 18px;">😐</button>
+                                <button class="mood-btn ${this.activeMood === 3 ? 'sel' : ''}" data-mood="3" style="padding: 6px 2px; font-size: 18px;">🙂</button>
+                                <button class="mood-btn ${this.activeMood === 4 ? 'sel' : ''}" data-mood="4" style="padding: 6px 2px; font-size: 18px;">😊</button>
+                                <button class="mood-btn ${this.activeMood === 5 ? 'sel' : ''}" data-mood="5" style="padding: 6px 2px; font-size: 18px;">😄</button>
                             </div>
-
-                            <div class="form-group" style="margin-bottom: 1.25rem;">
-                                <label style="font-size: 0.8rem;">What was hard 💪</label>
-                                <textarea class="form-control" id="j-hard" placeholder="Any friction, struggle, or habit you skipped?" style="border-radius: 8px; padding: 0.65rem 0.75rem; font-size: 0.85rem; width: 100%; min-height: 80px; resize: vertical;">${hardText}</textarea>
+                        </div>
+                        <!-- Energy -->
+                        <div style="flex: 1; min-width: 150px;">
+                            <div style="font-size: 0.72rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 0.4rem; display: flex; align-items: center; gap: 4px;">
+                                <i data-lucide="zap" style="width: 12px; height: 12px; color: var(--color-warning);"></i>
+                                Energy
+                                <span id="energy-label" style="color: var(--text-muted); font-weight: 500; margin-left: auto;">${this.activeEnergy > 0 ? energyLabels[this.activeEnergy] : '—'}</span>
                             </div>
-
-                            <div class="form-group" style="margin-bottom: 1.25rem;">
-                                <label style="font-size: 0.8rem;">Anxiety parking lot 🅿️</label>
-                                <textarea class="form-control" id="j-anxiety" placeholder="Park thoughts here — things to look up tomorrow, not tonight…" style="border-radius: 8px; padding: 0.65rem 0.75rem; font-size: 0.85rem; width: 100%; min-height: 80px; resize: vertical;">${anxietyText}</textarea>
-                            </div>
-
-                            <div class="form-group" style="margin-bottom: 1.25rem;">
-                                <label style="font-size: 0.8rem;">Intention for tomorrow 🌅</label>
-                                <textarea class="form-control" id="j-tomorrow" placeholder="One thing to focus on or do differently…" style="border-radius: 8px; padding: 0.65rem 0.75rem; font-size: 0.85rem; width: 100%; min-height: 80px; resize: vertical;">${tomorrowText}</textarea>
-                            </div>
-
-                            <div style="border-top: 1px dashed var(--border-color); margin: 1.5rem 0;"></div>
-
-                            <div class="form-group" style="margin-bottom: 0;">
-                                <label style="font-size: 0.8rem;">Free writing 📝</label>
-                                <textarea id="reflections-textarea" class="form-control" style="border-radius: 8px; padding: 0.65rem 0.75rem; font-size: 0.85rem; width: 100%; min-height: 120px; resize: vertical;" placeholder="Thoughts, feelings, gratitude, observations, anything…">${freeText}</textarea>
-                            </div>
-
-                            <div class="info-box">
-                                <strong>Anxiety parking lot</strong> — when an urge to doomscroll or research something hits in the evening, write it here instead. Deal with it tomorrow during daylight hours.
+                            <div class="energy-picker" id="nrg-row" style="margin-bottom: 0; gap: 0.3rem;">
+                                <button class="energy-btn ${this.activeEnergy === 1 ? 'sel' : ''}" data-energy="1" style="padding: 6px 2px;">1</button>
+                                <button class="energy-btn ${this.activeEnergy === 2 ? 'sel' : ''}" data-energy="2" style="padding: 6px 2px;">2</button>
+                                <button class="energy-btn ${this.activeEnergy === 3 ? 'sel' : ''}" data-energy="3" style="padding: 6px 2px;">3</button>
+                                <button class="energy-btn ${this.activeEnergy === 4 ? 'sel' : ''}" data-energy="4" style="padding: 6px 2px;">4</button>
+                                <button class="energy-btn ${this.activeEnergy === 5 ? 'sel' : ''}" data-energy="5" style="padding: 6px 2px;">5</button>
                             </div>
                         </div>
                     </div>
                 </div>
+
+                <!-- Daily Reflection — the PRIMARY input area, always on top -->
+                <div class="glass-card" style="padding: 1rem 1.15rem; border-radius: var(--radius-md); margin-bottom: 0.75rem;">
+                    <div style="display: flex; flex-direction: column; gap: 0.85rem;">
+
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label style="font-size: 0.78rem; font-weight: 600; display: flex; align-items: center; gap: 4px; margin-bottom: 0.3rem;">
+                                🏆 Today's wins
+                            </label>
+                            <textarea class="form-control j-auto-grow" id="j-wins" placeholder="What went well? Any habit that felt automatic?" style="border-radius: 8px; padding: 0.5rem 0.65rem; font-size: 0.82rem; width: 100%; min-height: 48px; resize: none; overflow: hidden;">${winsText}</textarea>
+                        </div>
+
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label style="font-size: 0.78rem; font-weight: 600; display: flex; align-items: center; gap: 4px; margin-bottom: 0.3rem;">
+                                💪 What was hard
+                            </label>
+                            <textarea class="form-control j-auto-grow" id="j-hard" placeholder="Any friction, struggle, or habit you skipped?" style="border-radius: 8px; padding: 0.5rem 0.65rem; font-size: 0.82rem; width: 100%; min-height: 48px; resize: none; overflow: hidden;">${hardText}</textarea>
+                        </div>
+
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label style="font-size: 0.78rem; font-weight: 600; display: flex; align-items: center; gap: 4px; margin-bottom: 0.3rem;">
+                                🅿️ Anxiety parking lot
+                                <span style="font-size: 0.65rem; color: var(--text-muted); font-weight: 400; margin-left: auto;">park it, deal tomorrow</span>
+                            </label>
+                            <textarea class="form-control j-auto-grow" id="j-anxiety" placeholder="Write it here instead of doomscrolling tonight…" style="border-radius: 8px; padding: 0.5rem 0.65rem; font-size: 0.82rem; width: 100%; min-height: 48px; resize: none; overflow: hidden;">${anxietyText}</textarea>
+                        </div>
+
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label style="font-size: 0.78rem; font-weight: 600; display: flex; align-items: center; gap: 4px; margin-bottom: 0.3rem;">
+                                🌅 Intention for tomorrow
+                            </label>
+                            <textarea class="form-control j-auto-grow" id="j-tomorrow" placeholder="One thing to focus on or do differently…" style="border-radius: 8px; padding: 0.5rem 0.65rem; font-size: 0.82rem; width: 100%; min-height: 40px; resize: none; overflow: hidden;">${tomorrowText}</textarea>
+                        </div>
+
+                        <div style="border-top: 1px dashed var(--border-color); padding-top: 0.75rem;">
+                            <label style="font-size: 0.78rem; font-weight: 600; display: flex; align-items: center; gap: 4px; margin-bottom: 0.3rem;">
+                                📝 Free writing
+                            </label>
+                            <textarea id="reflections-textarea" class="form-control j-auto-grow" style="border-radius: 8px; padding: 0.5rem 0.65rem; font-size: 0.82rem; width: 100%; min-height: 60px; resize: none; overflow: hidden;" placeholder="Thoughts, feelings, gratitude, observations…">${freeText}</textarea>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Routine Compliance — collapsible, secondary -->
+                <div class="glass-card" style="padding: 0; border-radius: var(--radius-md); margin-bottom: 0.75rem; overflow: hidden;">
+                    <button id="toggle-routine-compliance" style="width: 100%; background: transparent; border: none; padding: 0.65rem 1rem; cursor: pointer; display: flex; justify-content: space-between; align-items: center; color: var(--text-primary);">
+                        <span style="font-size: 0.82rem; font-weight: 600; display: flex; align-items: center; gap: 6px;">
+                            <i data-lucide="check-square" style="width: 14px; height: 14px; color: var(--primary);"></i> Routine Compliance
+                        </span>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span style="font-size: 0.72rem; font-weight: 700; background: var(--sidebar-active-bg); color: var(--primary); padding: 2px 8px; border-radius: 10px;">${completedCount} / ${totalCount}</span>
+                            <i data-lucide="chevron-down" id="compliance-chevron" style="width: 14px; height: 14px; color: var(--text-muted); transition: transform 0.2s;"></i>
+                        </div>
+                    </button>
+                    <div id="routine-compliance-content" style="display: none; padding: 0 1rem 0.75rem;">
+                        <div style="display: flex; flex-direction: column; gap: 2px;">
+                            ${habitSummaryHtml}
+                        </div>
+                    </div>
+                </div>
+
             </div>
 
             <!-- Toast Success Popup -->
             <div id="save-toast" class="glass-card animate-slide-up" style="position: fixed; bottom: 2rem; right: 2rem; background: var(--grad-success); color: #ffffff; padding: 0.75rem 1.5rem; border-radius: var(--radius-sm); box-shadow: 0 10px 25px rgba(16, 185, 129, 0.3); z-index: 10000; border: none; display: none;">
                 <div style="display: flex; align-items: center; gap: 8px; font-weight: 600;">
                     <i data-lucide="check-circle" style="width: 20px; height: 20px;"></i>
-                    <span id="toast-message-span">Reflection Log Saved! +20 XP 🔥</span>
+                    <span id="toast-message-span">Reflection Log Saved! +2 Coins 🪙</span>
                 </div>
             </div>
         `;
 
         lucide.createIcons();
         this._setupListeners();
+        this._initAutoGrow();
     },
 
     _setupListeners() {
@@ -1457,23 +1879,43 @@ const Journal = {
             this.loadDateLog();
         });
 
+        const moodLabels = ['', 'Rough', 'Meh', 'Okay', 'Good', 'Great'];
         const moodButtons = this.container.querySelectorAll('#mood-row .mood-btn');
+        const moodLabel = this.container.querySelector('#mood-label');
         moodButtons.forEach(btn => {
             btn.addEventListener('click', () => {
                 moodButtons.forEach(b => b.classList.remove('sel'));
                 btn.classList.add('sel');
                 this.activeMood = parseInt(btn.getAttribute('data-mood'));
+                if (moodLabel) moodLabel.textContent = moodLabels[this.activeMood] || '—';
             });
         });
 
+        const energyLabels = ['', 'Drained', 'Low', 'Balanced', 'Charged', 'Peak'];
         const energyButtons = this.container.querySelectorAll('#nrg-row .energy-btn');
+        const energyLabel = this.container.querySelector('#energy-label');
         energyButtons.forEach(btn => {
             btn.addEventListener('click', () => {
                 energyButtons.forEach(b => b.classList.remove('sel'));
                 btn.classList.add('sel');
                 this.activeEnergy = parseInt(btn.getAttribute('data-energy'));
+                if (energyLabel) energyLabel.textContent = energyLabels[this.activeEnergy] || '—';
             });
         });
+
+        // Collapsible Routine Compliance
+        const toggleBtn = this.container.querySelector('#toggle-routine-compliance');
+        const complianceContent = this.container.querySelector('#routine-compliance-content');
+        const complianceChevron = this.container.querySelector('#compliance-chevron');
+        if (toggleBtn && complianceContent) {
+            toggleBtn.addEventListener('click', () => {
+                const isOpen = complianceContent.style.display !== 'none';
+                complianceContent.style.display = isOpen ? 'none' : 'block';
+                if (complianceChevron) {
+                    complianceChevron.style.transform = isOpen ? '' : 'rotate(180deg)';
+                }
+            });
+        }
 
         this.container.querySelector('#btn-save-journal').addEventListener('click', () => {
             const isFirstSave = !db.logs[this.selectedDate] || db.logs[this.selectedDate].mood === 0;
@@ -1500,13 +1942,38 @@ const Journal = {
             
             let gainedText = "Reflection Log Saved!";
             if (isFirstSave) {
-                db.addXp(20);
-                gainedText = "Reflection Log Saved! +20 XP 🔥";
+                db.addCoins(2);
+                gainedText = "Reflection Log Saved! +2 Coins 🪙";
             }
             this._showToast(gainedText);
             
             // Re-render to reflect new summary/compliance states
             this.loadDateLog();
+        });
+    },
+
+    _initAutoGrow() {
+        const textareas = this.container.querySelectorAll('.j-auto-grow');
+        textareas.forEach(ta => {
+            // Set initial height based on content
+            ta.style.height = 'auto';
+            if (ta.scrollHeight > ta.clientHeight) {
+                ta.style.height = ta.scrollHeight + 'px';
+            }
+            // Grow on input
+            ta.addEventListener('input', () => {
+                ta.style.height = 'auto';
+                ta.style.height = ta.scrollHeight + 'px';
+            });
+            // Subtle focus glow
+            ta.addEventListener('focus', () => {
+                ta.style.borderColor = 'var(--primary)';
+                ta.style.boxShadow = '0 0 0 2px rgba(184, 240, 100, 0.12)';
+            });
+            ta.addEventListener('blur', () => {
+                ta.style.borderColor = '';
+                ta.style.boxShadow = '';
+            });
         });
     },
 
@@ -1588,9 +2055,9 @@ const FocusTasks = {
                             <p style="font-size: 0.78rem; color: var(--text-secondary); line-height: 1.5; margin: 0 0 0.75rem 0;">
                                 Uncompleted tasks will automatically carry forward to subsequent days. This prevents them from slipping through the cracks until they are checked off or deleted.
                             </p>
-                            <div style="background: rgba(99, 102, 241, 0.05); border: 1px solid rgba(99, 102, 241, 0.15); border-radius: 8px; padding: 0.75rem; font-size: 0.75rem; color: var(--primary-light);">
-                                <span style="font-weight: 600; display: block; margin-bottom: 2px;">⚡ Level Up!</span>
-                                Completing focus tasks awards you +5 XP. Consistently complete your focus items to unlock higher levels and titles.
+                            <div style="background: rgba(251, 191, 36, 0.05); border: 1px solid rgba(251, 191, 36, 0.15); border-radius: 8px; padding: 0.75rem; font-size: 0.75rem; color: #fbbf24;">
+                                <span style="font-weight: 600; display: block; margin-bottom: 2px;">🪙 Earn Coins!</span>
+                                Completing focus tasks awards you +1 Coin 🪙. Spend your saved coins to redeem exciting incentives in the Rewards Shop!
                             </div>
                         </div>
                     </div>
@@ -1686,8 +2153,8 @@ const FocusTasks = {
 
                 <div style="display: flex; align-items: center; gap: 8px;">
                     ${task.completed ? `
-                        <span style="font-size: 0.65rem; font-weight: 700; color: var(--color-success); background: rgba(30,142,62,0.05); padding: 1px 6px; border-radius: 4px; border: 1px solid rgba(30,142,62,0.15);">
-                            +5 XP 🔥
+                        <span style="font-size: 0.65rem; font-weight: 700; color: #fbbf24; background: rgba(251,191,36,0.05); padding: 1px 6px; border-radius: 4px; border: 1px solid rgba(251,191,36,0.15);">
+                            +1 Coin 🪙
                         </span>
                     ` : ''}
                     <button class="btn-delete-task" style="background: transparent; border: none; cursor: pointer; color: var(--text-muted); padding: 2px;"><i data-lucide="trash-2" style="width: 14px; height: 14px;"></i></button>
@@ -1721,7 +2188,7 @@ const FocusTasks = {
                         db.saveTask(task);
                         
                         if (task.completed) {
-                            db.addXp(5);
+                            db.addCoins(1);
                             this._playConfetti();
                             
                             // Visual slide out and fade
@@ -1772,7 +2239,325 @@ const FocusTasks = {
     }
 };
 
+// =========================================================================
+// 4c. DEDICATED REWARDS SHOP VIEW COMPONENT [NEW]
+// =========================================================================
+const Rewards = {
+    container: null,
 
+    render(container) {
+        this.container = container;
+        this.updateView();
+    },
+
+    updateView() {
+        const blueprints = db.getBlueprints();
+        const coins = blueprints.coins || 0;
+        const rewardsList = blueprints.customRewards || [];
+        const redeemedList = blueprints.redeemedRewards || [];
+
+        // Build list of rewards cards HTML
+        const rewardsCardsHtml = rewardsList.map(r => {
+            const canRedeem = coins >= r.cost;
+            const btnClass = canRedeem ? 'btn-primary' : 'btn-secondary';
+            const btnStyle = canRedeem 
+                ? 'background: linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%); color: #000; border: none; font-weight: 700;' 
+                : 'opacity: 0.4; cursor: not-allowed;';
+
+            return `
+                <div class="glass-card reward-item-card" style="display: flex; flex-direction: column; justify-content: space-between; padding: 1.25rem; border-radius: var(--radius-md); transition: transform 0.2s, box-shadow 0.2s; position: relative;">
+                    <div style="display: flex; align-items: flex-start; gap: 12px;">
+                        <div style="background: rgba(251, 191, 36, 0.1); border: 1px solid rgba(251, 191, 36, 0.2); border-radius: 8px; padding: 0.5rem; display: flex; align-items: center; justify-content: center; color: #fbbf24;">
+                            <i data-lucide="${r.icon || 'gift'}" style="width: 20px; height: 20px;"></i>
+                        </div>
+                        <div style="display: flex; flex-direction: column; gap: 4px; min-width: 0;">
+                            <span style="font-size: 0.9rem; font-weight: 600; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="${r.name}">${r.name}</span>
+                            <span style="font-size: 0.78rem; font-weight: 700; color: #fbbf24; display: flex; align-items: center; gap: 4px;">
+                                🪙 ${r.cost} Coins
+                            </span>
+                        </div>
+                    </div>
+
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 1.25rem; gap: 8px;">
+                        <button class="btn btn-delete-reward" data-id="${r.id}" style="padding: 0.3rem 0.5rem; font-size: 0.7rem; border-color: rgba(239, 68, 68, 0.15); color: #ef4444; background: transparent;" title="Remove Reward">
+                            <i data-lucide="trash-2" style="width: 12px; height: 12px;"></i>
+                        </button>
+                        <button class="btn ${btnClass} btn-redeem-reward" data-id="${r.id}" style="padding: 0.4rem 1rem; font-size: 0.78rem; border-radius: var(--radius-sm); flex: 1; display: flex; align-items: center; justify-content: center; gap: 4px; ${btnStyle}" ${!canRedeem ? 'disabled' : ''}>
+                            <i data-lucide="sparkles" style="width: 12px; height: 12px;"></i> Redeem
+                        </button>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        // Build redemption history HTML (last 10 redemptions)
+        const sortedRedemptions = [...redeemedList].sort((a,b) => b.timestamp - a.timestamp);
+        const redemptionsHtml = sortedRedemptions.length > 0
+            ? sortedRedemptions.slice(0, 10).map(item => {
+                const timeStr = this.formatTimeAgo(item.timestamp);
+                const isAward = item.cost < 0;
+                return `
+                    <div style="display: flex; align-items: center; justify-content: space-between; font-size: 0.8rem; padding: 0.5rem 0; border-bottom: 1px dashed var(--border-color);">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span style="font-size: 1.1rem;">${isAward ? '🪙' : '🎉'}</span>
+                            <div style="display: flex; flex-direction: column;">
+                                <span style="font-weight: 600; color: var(--text-primary);">${item.name}</span>
+                                <span style="font-size: 0.68rem; color: var(--text-muted);">${timeStr}</span>
+                            </div>
+                        </div>
+                        <span style="font-size: 0.75rem; font-weight: 700; color: ${isAward ? '#b8f064' : '#ef4444'};">
+                            ${isAward ? '+' : '-'}🪙 ${Math.abs(item.cost)}
+                        </span>
+                    </div>
+                `;
+            }).join('')
+            : `<div style="font-size: 0.78rem; color: var(--text-muted); text-align: center; font-style: italic; padding: 1rem 0;">No rewards redeemed yet. Complete routines to earn coins!</div>`;
+
+        this.container.innerHTML = `
+            <div class="animate-fade-in" style="width: 100%;">
+                
+                <!-- Page Header & Stats Row -->
+                <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 1.5rem; margin-bottom: 1.5rem; align-items: stretch; flex-wrap: wrap;">
+                    
+                    <!-- Welcome Card with instructions -->
+                    <div class="glass-card" style="padding: 1.5rem; border-radius: var(--radius-md); display: flex; flex-direction: column; justify-content: center;">
+                        <h2 style="font-size: 1.35rem; font-weight: 600; color: var(--text-primary); margin-bottom: 0.5rem; display: flex; align-items: center; gap: 8px;">
+                            <i data-lucide="gift" style="color: #fbbf24;"></i> Rewards Shop
+                        </h2>
+                        <p style="font-size: 0.82rem; color: var(--text-secondary); line-height: 1.5; margin: 0;">
+                            Turn your consistency into motivation! Earn coins by checking off habits (+1 coin), completing all routines in a section (+3 bonus), logging sleep (+2), and finishing focus tasks (+1). Spend your coins here to redeem fun rewards.
+                        </p>
+                    </div>
+
+                    <!-- Large Coin Balance Card -->
+                    <div class="glass-card" style="padding: 1.5rem; border-radius: var(--radius-md); display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; background: linear-gradient(135deg, rgba(245, 158, 11, 0.05) 0%, rgba(251, 191, 36, 0.02) 100%); border: 1px solid rgba(251, 191, 36, 0.15);">
+                        <span style="font-size: 2.2rem; margin-bottom: 4px; display: inline-block; animation: float 3s ease-in-out infinite;">🪙</span>
+                        <h3 id="shop-coin-balance" style="font-size: 1.85rem; font-weight: 900; color: #fbbf24; margin: 0; text-shadow: 0 0 15px rgba(251, 191, 36, 0.3);">${coins}</h3>
+                        <p style="font-size: 0.72rem; color: var(--text-muted); font-weight: 700; margin: 2px 0 0 0; text-transform: uppercase; letter-spacing: 0.05em;">Current Balance</p>
+                    </div>
+                </div>
+
+                <div class="view-grid">
+                    <!-- Left: Rewards Catalog -->
+                    <div class="column-main" style="display: flex; flex-direction: column; gap: 1.5rem; width: 100%; box-sizing: border-box;">
+                        
+                        <!-- Catalog Header & Grid -->
+                        <div class="glass-card" style="padding: 1.5rem; border-radius: var(--radius-md); width: 100%; box-sizing: border-box;">
+                            <h3 class="card-title" style="font-size: 1.1rem; font-weight: 500; margin-bottom: 1.25rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem; display: flex; align-items: center; gap: 8px;">
+                                <i data-lucide="shopping-bag" style="color: var(--primary); width: 18px; height: 18px;"></i> Available Rewards
+                            </h3>
+
+                            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 1rem;">
+                                ${rewardsList.length > 0 ? rewardsCardsHtml : `
+                                    <div style="grid-column: span -1; text-align: center; padding: 2rem; color: var(--text-secondary); border: 1px dashed var(--border-color); border-radius: var(--radius-md); font-size: 0.8rem; font-style: italic;">
+                                        No rewards defined. Add a custom reward below!
+                                    </div>
+                                `}
+                            </div>
+                        </div>
+
+                        <!-- Add Custom Reward Card -->
+                        <div class="glass-card" style="padding: 1.5rem; border-radius: var(--radius-md); width: 100%; box-sizing: border-box;">
+                            <h3 class="card-title" style="font-size: 1.1rem; font-weight: 500; margin-bottom: 1rem; display: flex; align-items: center; gap: 8px;">
+                                <i data-lucide="plus-circle" style="color: var(--primary); width: 18px; height: 18px;"></i> Add Custom Reward
+                            </h3>
+                            
+                            <form id="new-reward-form" style="display: flex; flex-direction: column; gap: 0.85rem;">
+                                <div style="display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 0.85rem; flex-wrap: wrap;">
+                                    <div class="form-group" style="margin-bottom: 0; gap: 4px;">
+                                        <label style="font-size: 0.75rem; font-weight: 600; color: var(--text-secondary);">Reward Title / Activity</label>
+                                        <input type="text" id="reward-name-input" class="form-control" placeholder="e.g. Order Pizza, Go to movies, Sleep in..." style="padding: 0.45rem 0.75rem; font-size: 0.82rem;" required>
+                                    </div>
+                                    <div class="form-group" style="margin-bottom: 0; gap: 4px;">
+                                        <label style="font-size: 0.75rem; font-weight: 600; color: var(--text-secondary);">Coin Cost</label>
+                                        <input type="number" id="reward-cost-input" class="form-control" min="1" max="1000" value="10" style="padding: 0.45rem 0.75rem; font-size: 0.82rem;" required>
+                                    </div>
+                                    <div class="form-group" style="margin-bottom: 0; gap: 4px;">
+                                        <label style="font-size: 0.75rem; font-weight: 600; color: var(--text-secondary);">Choose Icon</label>
+                                        <select id="reward-icon-select" class="form-control" style="padding: 0.45rem 0.75rem; font-size: 0.82rem;" required>
+                                            <option value="gift" selected>🎁 Gift</option>
+                                            <option value="tv">📺 TV / Show</option>
+                                            <option value="gamepad-2">🎮 Game</option>
+                                            <option value="pizza">🍕 Pizza / Meal</option>
+                                            <option value="coffee">☕ Coffee</option>
+                                            <option value="cookie">🍪 Treat</option>
+                                            <option value="shopping-cart">🛒 Shop</option>
+                                            <option value="moon">😴 Sleep</option>
+                                            <option value="smartphone">📱 Phone</option>
+                                            <option value="book">📖 Read</option>
+                                            <option value="heart">💖 Self-care</option>
+                                            <option value="sparkles">✨ Sparkles</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <button type="submit" class="btn btn-primary" style="align-self: flex-end; padding: 0.45rem 1.25rem; font-size: 0.8rem; border-radius: 12px; font-weight: 600;"><i data-lucide="plus"></i> Add Reward</button>
+                            </form>
+                        </div>
+                    </div>
+
+                    <!-- Right: Redemption History -->
+                    <div class="column-sidebar" style="display: flex; flex-direction: column; gap: 1.5rem; width: 100%; box-sizing: border-box;">
+                        
+                        <div class="glass-card" style="padding: 1.5rem; border-radius: var(--radius-md); width: 100%; box-sizing: border-box;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; border-bottom: 1px solid var(--border-color); padding-bottom: 0.75rem;">
+                                <h4 style="font-size: 1rem; font-weight: 500; display: flex; align-items: center; gap: 6px; margin: 0; color: var(--text-primary);">
+                                    <i data-lucide="history" style="color: var(--primary); width: 18px; height: 18px;"></i> Redemption History
+                                </h4>
+                                ${sortedRedemptions.length > 0 ? `
+                                    <button id="btn-clear-redemptions" style="background: transparent; border: none; font-size: 0.68rem; color: var(--text-muted); cursor: pointer; font-weight: 600; padding: 0;">Clear</button>
+                                ` : ''}
+                            </div>
+                            <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+                                ${redemptionsHtml}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Toast Success Popup -->
+                <div id="shop-toast" class="glass-card animate-slide-up" style="position: fixed; bottom: 2rem; right: 2rem; background: linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%); color: #000; padding: 0.75rem 1.5rem; border-radius: var(--radius-sm); box-shadow: 0 10px 25px rgba(245, 158, 11, 0.3); z-index: 10000; border: none; display: none;">
+                    <div style="display: flex; align-items: center; gap: 8px; font-weight: 700;">
+                        <i data-lucide="party-popper" style="width: 20px; height: 20px;"></i>
+                        <span id="shop-toast-msg">Reward Redeemed! Enjoy! 🎉</span>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        lucide.createIcons();
+        this._setupListeners();
+    },
+
+    _setupListeners() {
+        // Form submission for adding custom rewards
+        const form = this.container.querySelector('#new-reward-form');
+        if (form) {
+            form.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const name = this.container.querySelector('#reward-name-input').value.trim();
+                const cost = parseInt(this.container.querySelector('#reward-cost-input').value);
+                const icon = this.container.querySelector('#reward-icon-select').value;
+
+                if (name && cost > 0) {
+                    const blueprints = db.getBlueprints();
+                    const list = blueprints.customRewards || [];
+                    const newReward = {
+                        id: 'r_' + Date.now(),
+                        name: name,
+                        cost: cost,
+                        icon: icon,
+                        system: false
+                    };
+                    list.push(newReward);
+                    blueprints.customRewards = list;
+                    db.saveBlueprints(blueprints);
+                    this.updateView();
+                    
+                    // Reset inputs
+                    this.container.querySelector('#reward-name-input').value = '';
+                    this.container.querySelector('#reward-cost-input').value = 10;
+                    this.container.querySelector('#reward-icon-select').value = 'gift';
+                }
+            });
+        }
+
+        // Redeem button clicks
+        const redeemBtns = this.container.querySelectorAll('.btn-redeem-reward');
+        redeemBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                const id = btn.getAttribute('data-id');
+                const blueprints = db.getBlueprints();
+                const reward = blueprints.customRewards.find(r => r.id === id);
+
+                if (reward && (blueprints.coins || 0) >= reward.cost) {
+                    // Deduct coins
+                    db.addCoins(-reward.cost);
+
+                    // Add redemption history log (refetch to get updated coins)
+                    const updatedBlueprints = db.getBlueprints();
+                    const redeemed = updatedBlueprints.redeemedRewards || [];
+                    redeemed.push({
+                        id: 'red_' + Date.now(),
+                        rewardId: reward.id,
+                        name: reward.name,
+                        cost: reward.cost,
+                        timestamp: Date.now()
+                    });
+                    updatedBlueprints.redeemedRewards = redeemed;
+                    db.saveBlueprints(updatedBlueprints);
+
+                    // Confetti and notification
+                    this._playConfetti();
+                    this._showToast(`Redeemed: ${reward.name}! 🎉`);
+
+                    // Re-render
+                    this.updateView();
+                }
+            });
+        });
+
+        // Delete reward button clicks
+        const deleteBtns = this.container.querySelectorAll('.btn-delete-reward');
+        deleteBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                const id = btn.getAttribute('data-id');
+                if (confirm("Are you sure you want to delete this reward?")) {
+                    const blueprints = db.getBlueprints();
+                    blueprints.customRewards = (blueprints.customRewards || []).filter(r => r.id !== id);
+                    db.saveBlueprints(blueprints);
+                    this.updateView();
+                }
+            });
+        });
+
+        // Clear redemption history
+        const clearBtn = this.container.querySelector('#btn-clear-redemptions');
+        if (clearBtn) {
+            clearBtn.addEventListener('click', () => {
+                if (confirm("Clear your redemption history log?")) {
+                    const blueprints = db.getBlueprints();
+                    blueprints.redeemedRewards = [];
+                    db.saveBlueprints(blueprints);
+                    this.updateView();
+                }
+            });
+        }
+    },
+
+    _playConfetti() {
+        if (window.confetti) {
+            window.confetti({
+                particleCount: 100,
+                spread: 70,
+                origin: { y: 0.6 },
+                colors: ['#fbbf24', '#f59e0b', '#d97706', '#6366f1', '#a855f7']
+            });
+        }
+    },
+
+    _showToast(msg) {
+        const toast = this.container.querySelector('#shop-toast');
+        const span = this.container.querySelector('#shop-toast-msg');
+        if (toast && span) {
+            span.innerText = msg;
+            toast.style.display = 'block';
+            setTimeout(() => {
+                toast.style.display = 'none';
+            }, 3000);
+        }
+    },
+
+    formatTimeAgo(timestamp) {
+        const diff = Date.now() - timestamp;
+        const mins = Math.floor(diff / 60000);
+        if (mins < 1) return 'Just now';
+        if (mins < 60) return `${mins}m ago`;
+        const hrs = Math.floor(mins / 60);
+        if (hrs < 24) return `${hrs}h ago`;
+        const days = Math.floor(hrs / 24);
+        return `${days}d ago`;
+    }
+};
 
 // =========================================================================
 // 5. BLUEPRINT VIEW COMPONENT
@@ -3003,7 +3788,12 @@ function doPost(e) {
                 if (ok) {
                     db.saveSettings({ sheetsUrl: url });
                     this._updateConnectionBadge(true);
-                    this._showToast("Connected!");
+                    this._showToast("Connected! Fetching cloud data...");
+                    
+                    // Pull and overwrite immediately to prevent overwriting cloud data!
+                    await db.pullFromGoogleSheets(true);
+                    this._showToast("Connected & Sync Complete! Reloading...");
+                    setTimeout(() => window.location.reload(), 1000);
                 } else {
                     this._updateConnectionBadge(false);
                     alert("Invalid sheets script response.");
@@ -3027,7 +3817,7 @@ function doPost(e) {
             btn.innerHTML = `<i data-lucide="loader"></i> Pulling...`;
             lucide.createIcons();
             try {
-                const ok = await db.pullFromGoogleSheets();
+                const ok = await db.pullFromGoogleSheets(true);
                 if (ok) {
                     db.saveSettings({ lastSyncTime: Date.now() });
                     alert("Cloud data synchronized! Reloading...");
@@ -3225,6 +4015,7 @@ class AppShell {
             dashboard: Dashboard,
             tasks: FocusTasks,
             journal: Journal,
+            rewards: Rewards,
             blueprint: Blueprint,
             analytics: Analytics,
             settings: Settings
@@ -3245,22 +4036,111 @@ class AppShell {
             this.route();
             this.setupInactivityTimer();
             this.runBackgroundSync();
+            this.applyPunishments();
         }
     }
 
     async runBackgroundSync() {
         const settings = db.getSettings();
-        if (settings.sheetsUrl && settings.autoSync) {
+        if (settings.sheetsUrl) {
             try {
-                console.log("[AtomicFlow Sync] Running background cloud pull to sync with Claude...");
+                console.log("[AtomicFlow Sync] Running background cloud pull on startup...");
                 const ok = await db.pullFromGoogleSheets();
                 if (ok) {
-                    console.log("[AtomicFlow Sync] Background pull successful! Re-rendering with fresh cloud data...");
+                    console.log("[AtomicFlow Sync] Background startup pull successful! Re-rendering view...");
                     this.renderGlobalUI();
                     this.route();
                 }
             } catch (e) {
                 console.error("[AtomicFlow Sync] Background startup pull failed:", e);
+            }
+        }
+    }
+
+    applyPunishments() {
+        const yesterday = new Date();
+        yesterday.setDate(yesterday.getDate() - 1);
+        const yesterdayStr = yesterday.toISOString().split('T')[0];
+
+        // 1. Ensure we only run the check once per day locally on this device session
+        const settings = db.getSettings();
+        settings.punishmentCheckedDates = settings.punishmentCheckedDates || {};
+        if (settings.punishmentCheckedDates[yesterdayStr]) return;
+
+        // Mark as checked immediately
+        settings.punishmentCheckedDates[yesterdayStr] = true;
+        db.saveSettings(settings);
+
+        // 2. Check if user has any habits (so we know it's not a fresh install)
+        const habits = db.getHabits();
+        if (habits.length === 0) return;
+
+        // Check the earliest habit creation date to avoid punishing them on their first day
+        const earliestHabit = habits.reduce((earliest, h) => {
+            const hTime = h.createdAt || 0;
+            return (hTime > 0 && hTime < earliest) ? hTime : earliest;
+        }, Date.now());
+        
+        // If they created their first habit today or yesterday, don't punish yesterday's lack of logging
+        const firstDayThreshold = yesterday.getTime();
+        if (earliestHabit > firstDayThreshold) return;
+
+        const log = db.logs[yesterdayStr];
+        const blueprints = db.getBlueprints();
+        blueprints.redeemedRewards = blueprints.redeemedRewards || [];
+
+        // Check if already punished via cloud synced logs to prevent duplicate penalties
+        const alreadyPunishedNoLog = blueprints.redeemedRewards.some(r => r.rewardId === 'system_punishment' && r.punishDate === yesterdayStr && r.id.includes('nolog'));
+        const alreadyPunishedSleep = blueprints.redeemedRewards.some(r => r.rewardId === 'system_punishment' && r.punishDate === yesterdayStr && r.id.includes('sleep'));
+
+        // 3. Rule: "Not open/log anything in the app yesterday" (-10 coins)
+        const loggedAnything = log && (
+            (log.mood !== undefined && log.mood > 0) || 
+            (log.journalNotes && log.journalNotes.trim().length > 0) ||
+            (log.completions && Object.keys(log.completions).some(hId => log.completions[hId].completed))
+        );
+
+        if (!loggedAnything && !alreadyPunishedNoLog) {
+            console.log(`[Punishment] User did not log anything yesterday (${yesterdayStr}). Deducting -10 coins.`);
+            db.addCoins(-10);
+            
+            // Log this as a system transaction
+            blueprints.redeemedRewards.push({
+                id: 'punish_nolog_' + Date.now(),
+                rewardId: 'system_punishment',
+                name: `Punishment: Forgot to log yesterday (${yesterdayStr})`,
+                cost: 10, // positive cost represents deduction
+                timestamp: Date.now(),
+                punishDate: yesterdayStr
+            });
+            db.saveBlueprints(blueprints);
+            
+            setTimeout(() => {
+                toast("Deducted -10 Coins: Forgot to log yesterday 💀", "#ea4335", "#fff");
+            }, 1500);
+            return; // If they didn't log anything, they also didn't log sleep, so we don't double punish
+        }
+
+        // 4. Rule: "Slept less than 8 hours yesterday" (-5 coins)
+        if (log && log.sleepBedtime && log.sleepWakeup && !alreadyPunishedSleep) {
+            const duration = AtomicManager.calculateSleepDuration(log.sleepBedtime, log.sleepWakeup);
+            if (duration > 0 && duration < 8.0) {
+                console.log(`[Punishment] Sleep yesterday (${yesterdayStr}) was only ${duration.toFixed(1)} hrs. Deducting -5 coins.`);
+                db.addCoins(-5);
+                
+                blueprints.redeemedRewards.push({
+                    id: 'punish_sleep_' + Date.now(),
+                    rewardId: 'system_punishment',
+                    name: `Punishment: Slept ${duration.toFixed(1)} hrs yesterday (Target: 8h)`,
+                    cost: 5,
+                    timestamp: Date.now(),
+                    punishDate: yesterdayStr
+                });
+                db.saveBlueprints(blueprints);
+                
+                setTimeout(() => {
+                    toast(`Deducted -5 Coins: Slept ${duration.toFixed(1)}h yesterday 😴`, "#ea4335", "#fff");
+                }, 1500);
             }
         }
     }
@@ -3319,6 +4199,7 @@ class AppShell {
         this.route();
         this.setupInactivityTimer();
         this.runBackgroundSync();
+        this.applyPunishments();
     }
 
     showLockScreen() {
@@ -3615,6 +4496,14 @@ class AppShell {
                 this.checkInactivityOnFocus();
             }
         });
+
+        const coinCard = document.getElementById('sidebar-coin-container');
+        if (coinCard) {
+            coinCard.addEventListener('click', () => {
+                if (this.isLocked) return;
+                window.location.hash = '#rewards';
+            });
+        }
     }
 
     renderGlobalUI() {
@@ -3675,22 +4564,16 @@ class AppShell {
             sidebarSubtitle.innerText = `${done} of ${habits.length} routines met today`;
         }
 
-        this.updateSidebarXpWidget();
+        this.updateSidebarCoinWidget();
     }
 
-    updateSidebarXpWidget() {
-        const xpPoints = db.settings.xp || 0;
-        const xpCalc = AtomicManager.getXpCalculations(xpPoints);
-        
-        const levelBadge = document.getElementById('sidebar-level-badge');
-        const xpBarInner = document.getElementById('sidebar-xp-bar');
-        const xpText = document.getElementById('sidebar-xp-text');
-        const titleText = document.getElementById('sidebar-title-text');
-        
-        if (levelBadge) levelBadge.innerText = `Lvl ${xpCalc.level}`;
-        if (xpBarInner) xpBarInner.style.width = `${xpCalc.percentage}%`;
-        if (xpText) xpText.innerText = `${xpCalc.currentXp} / ${xpCalc.nextXp} XP`;
-        if (titleText) titleText.innerText = xpCalc.title;
+    updateSidebarCoinWidget() {
+        const blueprints = db.getBlueprints();
+        const coins = blueprints.coins || 0;
+        const coinText = document.getElementById('sidebar-coin-text');
+        if (coinText) {
+            coinText.innerText = `${coins} Coin${coins !== 1 ? 's' : ''}`;
+        }
     }
 
     route() {

@@ -193,6 +193,38 @@ const TOOLS = [
       },
       required: ["date", "mood", "energy"]
     }
+  },
+  {
+    name: "award_coins",
+    description: "Award or deduct gold coins for the user based on performance, milestones, or custom coaching events.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        amount: {
+          type: "integer",
+          description: "Number of coins to award (positive, e.g. 5) or deduct (negative, e.g. -5)."
+        },
+        reason: {
+          type: "string",
+          description: "Descriptive reason for the coin adjustment (e.g. 'Completed weekly review with Coach')."
+        }
+      },
+      required: ["amount", "reason"]
+    }
+  },
+  {
+    name: "redeem_reward",
+    description: "Redeem a reward from the user's Rewards Shop by deducting the cost from their coin balance and logging the redemption.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        rewardId: {
+          type: "string",
+          description: "The unique ID of the reward to redeem (e.g., 'r_nap', or custom reward IDs)."
+        }
+      },
+      required: ["rewardId"]
+    }
   }
 ];
 
@@ -369,6 +401,77 @@ function createServerInstance() {
             content: [{
               type: "text",
               text: `Success: Journal log for ${dateStr} saved successfully.\n${JSON.stringify(logs[dateStr], null, 2)}`
+            }]
+          };
+        }
+
+        case "award_coins": {
+          const blueprints = state.blueprints || { identities: [], stacks: [], coins: 0, customRewards: [], redeemedRewards: [] };
+          const amount = args.amount;
+          const reason = args.reason;
+
+          blueprints.coins = Math.max(0, (blueprints.coins || 0) + amount);
+          
+          blueprints.redeemedRewards = blueprints.redeemedRewards || [];
+          blueprints.redeemedRewards.push({
+            id: 'earn_' + Date.now(),
+            rewardId: 'system_award',
+            name: `Awarded by Claude: ${reason}`,
+            cost: -amount, // Negative cost represents earning!
+            timestamp: Date.now()
+          });
+
+          state.blueprints = blueprints;
+          await pushState(state);
+
+          return {
+            content: [{
+              type: "text",
+              text: `Success: Awarded ${amount} coins to user. New balance: ${blueprints.coins} coins.\nReason: ${reason}`
+            }]
+          };
+        }
+
+        case "redeem_reward": {
+          const blueprints = state.blueprints || { identities: [], stacks: [], coins: 0, customRewards: [], redeemedRewards: [] };
+          const rewardId = args.rewardId;
+
+          // Find the reward
+          const reward = (blueprints.customRewards || []).find(r => r.id === rewardId);
+          if (!reward) {
+            return {
+              content: [{ type: "text", text: `Error: Reward with ID '${rewardId}' not found in catalog.` }],
+              isError: true
+            };
+          }
+
+          if ((blueprints.coins || 0) < reward.cost) {
+            return {
+              content: [{ type: "text", text: `Error: Insufficient coins. Reward costs ${reward.cost} coins, but user only has ${blueprints.coins} coins.` }],
+              isError: true
+            };
+          }
+
+          // Deduct coins
+          blueprints.coins -= reward.cost;
+
+          // Log redemption
+          blueprints.redeemedRewards = blueprints.redeemedRewards || [];
+          blueprints.redeemedRewards.push({
+            id: 'red_' + Date.now(),
+            rewardId: reward.id,
+            name: reward.name,
+            cost: reward.cost,
+            timestamp: Date.now()
+          });
+
+          state.blueprints = blueprints;
+          await pushState(state);
+
+          return {
+            content: [{
+              type: "text",
+              text: `Success: Redeemed reward '${reward.name}'. Deducted ${reward.cost} coins. New balance: ${blueprints.coins} coins.`
             }]
           };
         }

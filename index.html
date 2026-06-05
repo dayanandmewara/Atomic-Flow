@@ -96,24 +96,27 @@
                     <i data-lucide="bar-chart-2"></i>
                     <span>Analytics</span>
                 </a>
+                <a href="#rewards" class="nav-link" data-view="rewards">
+                    <i data-lucide="gift"></i>
+                    <span>Rewards Shop</span>
+                </a>
                 <a href="#settings" class="nav-link" data-view="settings">
                     <i data-lucide="sliders"></i>
                     <span>Settings</span>
                 </a>
             </nav>
 
-            <!-- Gamification XP progression -->
-            <div class="xp-container">
-                <div class="xp-header">
-                    <span style="color: var(--sidebar-text-muted);">System Level</span>
-                    <span class="xp-level-badge" id="sidebar-level-badge">Lvl 1</span>
-                </div>
-                <div class="xp-bar-outer">
-                    <div class="xp-bar-inner" id="sidebar-xp-bar" style="width: 0%;"></div>
-                </div>
-                <div class="xp-footer">
-                    <span id="sidebar-xp-text">0 / 100 XP</span>
-                    <span id="sidebar-title-text" style="color: var(--primary-light);">Novice</span>
+            <!-- Gamification Coin progression -->
+            <div class="xp-container" id="sidebar-coin-container" style="cursor: pointer; transition: all 0.25s ease; border: 1px solid rgba(251, 191, 36, 0.15); background: linear-gradient(135deg, rgba(245, 158, 11, 0.04) 0%, rgba(251, 191, 36, 0.01) 100%);">
+                <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; gap: 10px;">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <span style="font-size: 1.6rem; animation: float 3s ease-in-out infinite; display: inline-block;">🪙</span>
+                        <div style="display: flex; flex-direction: column; gap: 2px;">
+                            <span id="sidebar-coin-text" style="font-size: 1.15rem; font-weight: 800; color: #fbbf24; text-shadow: 0 0 12px rgba(251, 191, 36, 0.25);">0 Coins</span>
+                            <span style="font-size: 0.65rem; color: var(--sidebar-text-muted); font-weight: 700; letter-spacing: 0.03em;">REWARDS BALANCE</span>
+                        </div>
+                    </div>
+                    <span style="background: linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%); color: #000; font-size: 0.68rem; font-weight: 800; border-radius: 12px; padding: 2px 8px; flex-shrink: 0; box-shadow: 0 2px 8px rgba(245, 158, 11, 0.25);">Shop &rarr;</span>
                 </div>
             </div>
 
