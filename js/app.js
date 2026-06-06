@@ -68,6 +68,28 @@ function showGlobalToast(msg, bg = 'linear-gradient(135deg, #f59e0b 0%, #fbbf24 
     }, 3500);
 }
 
+// Helper: Check if a habit is active on a specific YYYY-MM-DD date
+function isHabitActiveOnDate(habit, dateStr) {
+    if (!habit.frequency || habit.frequency === 'daily') return true;
+    
+    const parts = dateStr.split('-');
+    if (parts.length !== 3) return true;
+    const dateObj = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+    const dayOfWeek = dateObj.getDay(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
+    
+    if (habit.frequency === 'weekdays') {
+        return dayOfWeek >= 1 && dayOfWeek <= 5;
+    }
+    if (habit.frequency === 'weekends') {
+        return dayOfWeek === 0 || dayOfWeek === 6;
+    }
+    if (habit.frequency === 'weekly') {
+        const targetDay = habit.weeklyDay !== undefined ? parseInt(habit.weeklyDay) : 0; // default 0 (Sunday)
+        return dayOfWeek === targetDay;
+    }
+    return true;
+}
+
 class DatabaseManager {
     constructor() {
         this.habits = this._load('habits') || [];
@@ -178,6 +200,12 @@ class DatabaseManager {
                 else if (hour >= 10 && hour < 17) habit.timeOfDay = 'daytime';
                 else if (hour >= 17 && hour < 21) habit.timeOfDay = 'evening';
                 else habit.timeOfDay = 'night';
+            }
+            if (!habit.frequency) {
+                habit.frequency = 'daily';
+            }
+            if (habit.weeklyDay === undefined) {
+                habit.weeklyDay = 0;
             }
             this.habits.push(habit);
         }
@@ -300,7 +328,7 @@ class DatabaseManager {
         const section = habit.timeOfDay;
         const log = this.getLogForDate(dateStr);
         
-        const sectionHabits = this.getHabits().filter(h => h.timeOfDay === section);
+        const sectionHabits = this.getHabits().filter(h => h.timeOfDay === section && isHabitActiveOnDate(h, dateStr));
         if (sectionHabits.length === 0) return { coinsGained: 0, sectionCompleted: null };
 
         if (!log.sectionBonuses) log.sectionBonuses = {};
@@ -712,6 +740,10 @@ const AtomicManager = {
         let tempStreak = 0;
 
         for (const dateStr of dates) {
+            // If the habit is not active on this date, skip it!
+            if (!isHabitActiveOnDate(habit, dateStr)) {
+                continue;
+            }
             const log = logs[dateStr];
             const isCompleted = log.completions && log.completions[habitId] && log.completions[habitId].completed;
             if (isCompleted) {
@@ -727,8 +759,27 @@ const AtomicManager = {
         let checkDate = new Date();
         let streakBroken = false;
         
+        // Define a safety limit to prevent infinite loops (past creation date with some buffer)
+        const limitDate = habit.createdAt ? new Date(habit.createdAt) : new Date();
+        if (habit.createdAt) {
+            limitDate.setDate(limitDate.getDate() - 7); // 7 days safety buffer before creation date
+        } else {
+            limitDate.setDate(limitDate.getDate() - 365); // fallback to 1 year back
+        }
+
         while (!streakBroken) {
+            if (checkDate < limitDate) {
+                break;
+            }
+            
             const dateStr = checkDate.toISOString().split('T')[0];
+            
+            // If the habit was not active on this date, skip this day without breaking the streak!
+            if (!isHabitActiveOnDate(habit, dateStr)) {
+                checkDate.setDate(checkDate.getDate() - 1);
+                continue;
+            }
+
             const log = logs[dateStr];
             const isCompleted = log && log.completions && log.completions[habitId] && log.completions[habitId].completed;
 
@@ -738,13 +789,27 @@ const AtomicManager = {
             } else {
                 if (dateStr === todayStr) {
                     checkDate.setDate(checkDate.getDate() - 1);
-                    const yestStr = checkDate.toISOString().split('T')[0];
-                    const yestLog = logs[yestStr];
-                    const yestCompleted = yestLog && yestLog.completions && yestLog.completions[habitId] && yestLog.completions[habitId].completed;
                     
-                    if (yestCompleted) {
-                        checkDate.setDate(checkDate.getDate() - 1);
-                    } else {
+                    // Look for the next preceding active day to see if it was completed
+                    let foundActivePreceding = false;
+                    let innerCheckDate = new Date(checkDate);
+                    while (!foundActivePreceding && innerCheckDate >= limitDate) {
+                        const innerStr = innerCheckDate.toISOString().split('T')[0];
+                        if (isHabitActiveOnDate(habit, innerStr)) {
+                            foundActivePreceding = true;
+                            const innerLog = logs[innerStr];
+                            const innerCompleted = innerLog && innerLog.completions && innerLog.completions[habitId] && innerLog.completions[habitId].completed;
+                            if (innerCompleted) {
+                                // The preceding active day was completed, so the streak is NOT broken by today's incomplete status (since today is still in progress)
+                                checkDate = innerCheckDate;
+                            } else {
+                                streakBroken = true;
+                            }
+                        } else {
+                            innerCheckDate.setDate(innerCheckDate.getDate() - 1);
+                        }
+                    }
+                    if (!foundActivePreceding) {
                         streakBroken = true;
                     }
                 } else {
@@ -768,6 +833,10 @@ const AtomicManager = {
         const warnings = [];
 
         for (const habit of habits) {
+            const isTodayActive = isHabitActiveOnDate(habit, todayStr);
+            const isYesterdayActive = isHabitActiveOnDate(habit, yesterdayStr);
+            if (!isTodayActive || !isYesterdayActive) continue;
+
             const yesterdayLog = logs[yesterdayStr];
             const todayLog = logs[todayStr];
 
@@ -798,7 +867,7 @@ const AtomicManager = {
         dates.forEach(d => {
             const log = logs[d];
             const logTime = new Date(d).getTime() + (24 * 60 * 60 * 1000);
-            const activeHabitsOnDate = habits.filter(h => h.createdAt <= logTime);
+            const activeHabitsOnDate = habits.filter(h => h.createdAt <= logTime && isHabitActiveOnDate(h, d));
             
             totalPossible += activeHabitsOnDate.length;
             
@@ -917,11 +986,13 @@ const Dashboard = {
         const filteredHabits = habits.filter(h => {
             const matchesCategory = this.activeFilter === 'all' || h.category === this.activeFilter;
             const matchesTime = this.activeTimeFilter === 'all' || h.timeOfDay === this.activeTimeFilter;
-            return matchesCategory && matchesTime;
+            const matchesDay = isHabitActiveOnDate(h, this.selectedDate);
+            return matchesCategory && matchesTime && matchesDay;
         });
 
         const warnings = AtomicManager.getNeverMissTwiceWarnings();
-        const stats = this._getDayStats(log, habits);
+        const activeHabitsForDay = habits.filter(h => isHabitActiveOnDate(h, this.selectedDate));
+        const stats = this._getDayStats(log, activeHabitsForDay);
 
         let warningBannerHtml = '';
         if (warnings.length > 0 && this.selectedDate === new Date().toISOString().split('T')[0]) {
@@ -1085,9 +1156,18 @@ const Dashboard = {
                         <span class="checkmark"><i data-lucide="check" style="width: 12px; height: 12px;"></i></span>
                     </label>
 
-                    <div class="habit-details" style="display: flex; align-items: center; gap: 6px; min-width: 0;">
+                    <div class="habit-details" style="display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1;">
                         <span class="habit-color-dot dot-${cat}"></span>
-                        <span class="habit-name" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${habit.name}</span>
+                        <div style="display: flex; flex-direction: column; min-width: 0;">
+                            <span class="habit-name" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 500;">${habit.name}</span>
+                            ${habit.frequency && habit.frequency !== 'daily' ? `
+                                <span class="habit-freq-badge" style="font-size: 0.65rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase; margin-top: 1px;">
+                                    ${habit.frequency === 'weekdays' ? '📅 Weekdays' : 
+                                      habit.frequency === 'weekends' ? '🏖️ Weekends' : 
+                                      `🔁 Weekly (${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][habit.weeklyDay || 0]})`}
+                                </span>
+                            ` : ''}
+                        </div>
                     </div>
 
                     <div style="display: flex; align-items: center; gap: 4px; flex-shrink: 0; margin-left: auto;">
@@ -1542,6 +1622,30 @@ const Dashboard = {
                     </div>
                 </div>
 
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;">
+                    <div class="form-group" style="margin-bottom: 0;">
+                        <label style="font-size: 0.75rem; font-weight: 600;">Frequency</label>
+                        <select id="edit-habit-frequency" class="form-control" style="font-size: 0.82rem; padding: 0.45rem 0.65rem;">
+                            <option value="daily" ${habit.frequency === 'daily' || !habit.frequency ? 'selected' : ''}>Everyday</option>
+                            <option value="weekdays" ${habit.frequency === 'weekdays' ? 'selected' : ''}>Weekdays (Mon-Fri)</option>
+                            <option value="weekends" ${habit.frequency === 'weekends' ? 'selected' : ''}>Weekends (Sat-Sun)</option>
+                            <option value="weekly" ${habit.frequency === 'weekly' ? 'selected' : ''}>Weekly</option>
+                        </select>
+                    </div>
+                    <div class="form-group" id="edit-habit-weekly-day-group" style="margin-bottom: 0; display: ${habit.frequency === 'weekly' ? 'block' : 'none'};">
+                        <label style="font-size: 0.75rem; font-weight: 600;">On Day</label>
+                        <select id="edit-habit-weekly-day" class="form-control" style="font-size: 0.82rem; padding: 0.45rem 0.65rem;">
+                            <option value="0" ${habit.weeklyDay === 0 || habit.weeklyDay === undefined ? 'selected' : ''}>Sunday</option>
+                            <option value="1" ${habit.weeklyDay === 1 ? 'selected' : ''}>Monday</option>
+                            <option value="2" ${habit.weeklyDay === 2 ? 'selected' : ''}>Tuesday</option>
+                            <option value="3" ${habit.weeklyDay === 3 ? 'selected' : ''}>Wednesday</option>
+                            <option value="4" ${habit.weeklyDay === 4 ? 'selected' : ''}>Thursday</option>
+                            <option value="5" ${habit.weeklyDay === 5 ? 'selected' : ''}>Friday</option>
+                            <option value="6" ${habit.weeklyDay === 6 ? 'selected' : ''}>Saturday</option>
+                        </select>
+                    </div>
+                </div>
+
                 <div class="form-group" style="margin-bottom: 0;">
                     <label style="font-size: 0.75rem; font-weight: 600;">Habit Stack Trigger</label>
                     <input type="text" id="edit-habit-trigger" class="form-control" style="font-size: 0.82rem; padding: 0.45rem 0.65rem;" value="${habit.stackTrigger || ''}" required>
@@ -1578,6 +1682,18 @@ const Dashboard = {
         backdrop.addEventListener('click', closeModal);
         modal.querySelector('#btn-close-edit-modal').addEventListener('click', closeModal);
 
+        const editFreqSelect = modal.querySelector('#edit-habit-frequency');
+        const editWeeklyDayGroup = modal.querySelector('#edit-habit-weekly-day-group');
+        if (editFreqSelect && editWeeklyDayGroup) {
+            editFreqSelect.addEventListener('change', (e) => {
+                if (e.target.value === 'weekly') {
+                    editWeeklyDayGroup.style.display = 'block';
+                } else {
+                    editWeeklyDayGroup.style.display = 'none';
+                }
+            });
+        }
+
         modal.querySelector('#edit-habit-form').addEventListener('submit', (e) => {
             e.preventDefault();
             const updatedHabit = {
@@ -1589,7 +1705,9 @@ const Dashboard = {
                 stackTrigger: modal.querySelector('#edit-habit-trigger').value.trim(),
                 cue: modal.querySelector('#edit-habit-cue').value.trim(),
                 twoMinuteVersion: modal.querySelector('#edit-habit-twomin').value.trim(),
-                reward: modal.querySelector('#edit-habit-reward').value.trim()
+                reward: modal.querySelector('#edit-habit-reward').value.trim(),
+                frequency: modal.querySelector('#edit-habit-frequency').value,
+                weeklyDay: parseInt(modal.querySelector('#edit-habit-weekly-day').value)
             };
 
             db.saveHabit(updatedHabit);
@@ -1673,11 +1791,12 @@ const Journal = {
     updateView(log) {
         // V6 Redesigned Journal: Single-column, reflection-first, ultra compact
         const habits = db.getHabits();
+        const activeHabitsForDay = habits.filter(h => isHabitActiveOnDate(h, this.selectedDate));
         const completions = log.completions || {};
         let completedCount = 0;
-        let totalCount = habits.length;
+        let totalCount = activeHabitsForDay.length;
 
-        const habitSummaryHtml = habits.map(h => {
+        const habitSummaryHtml = activeHabitsForDay.map(h => {
             const isDone = completions[h.id] && completions[h.id].completed;
             if (isDone) completedCount++;
             return `
@@ -1918,7 +2037,8 @@ const Journal = {
         }
 
         this.container.querySelector('#btn-save-journal').addEventListener('click', () => {
-            const isFirstSave = !db.logs[this.selectedDate] || db.logs[this.selectedDate].mood === 0;
+            const existingLog = db.logs[this.selectedDate];
+            const isFirstSave = !existingLog || !existingLog.journalSaveBonusAwarded;
             
             const winsVal = this.container.querySelector('#j-wins').value.trim();
             const hardVal = this.container.querySelector('#j-hard').value.trim();
@@ -1935,7 +2055,8 @@ const Journal = {
                 tomorrow: tomorrowVal,
                 improvement: tomorrowVal, // compatibility
                 free: freeVal,
-                journalNotes: freeVal // compatibility
+                journalNotes: freeVal, // compatibility
+                journalSaveBonusAwarded: (existingLog && existingLog.journalSaveBonusAwarded) || isFirstSave
             };
 
             db.saveLogForDate(this.selectedDate, logData);
@@ -2663,6 +2784,34 @@ const Blueprint = {
                                     </div>
                                 </div>
 
+                                <div style="display: flex; gap: 0.75rem;">
+                                    <div class="form-group" style="flex: 1; margin-bottom: 0;">
+                                        <label style="font-size: 0.78rem; font-weight: 600; display: flex; align-items: center; gap: 4px;">
+                                            <i data-lucide="calendar" style="width: 13px; height: 13px; color: var(--primary);"></i> Frequency
+                                        </label>
+                                        <select id="new-habit-frequency" class="form-control" style="font-size: 0.82rem; padding: 0.45rem 0.65rem;">
+                                            <option value="daily">Everyday</option>
+                                            <option value="weekdays">Weekdays (Mon-Fri)</option>
+                                            <option value="weekends">Weekends (Sat-Sun)</option>
+                                            <option value="weekly">Weekly</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group" id="new-habit-weekly-day-group" style="flex: 1; margin-bottom: 0; display: none;">
+                                        <label style="font-size: 0.78rem; font-weight: 600; display: flex; align-items: center; gap: 4px;">
+                                            <i data-lucide="calendar-days" style="width: 13px; height: 13px; color: var(--primary);"></i> On Day
+                                        </label>
+                                        <select id="new-habit-weekly-day" class="form-control" style="font-size: 0.82rem; padding: 0.45rem 0.65rem;">
+                                            <option value="0">Sunday</option>
+                                            <option value="1">Monday</option>
+                                            <option value="2">Tuesday</option>
+                                            <option value="3">Wednesday</option>
+                                            <option value="4">Thursday</option>
+                                            <option value="5">Friday</option>
+                                            <option value="6">Saturday</option>
+                                        </select>
+                                    </div>
+                                </div>
+
                                 <div class="form-group" style="margin-bottom: 0;">
                                     <label style="font-size: 0.78rem; font-weight: 600; display: flex; align-items: center; gap: 4px;">
                                         <i data-lucide="layers" style="width: 13px; height: 13px; color: var(--color-warning);"></i> Habit Stack Trigger
@@ -2780,6 +2929,18 @@ const Blueprint = {
         // Forge Habit Form
         const newForm = this.container.querySelector('#new-habit-form');
         if (newForm) {
+            const freqSelect = this.container.querySelector('#new-habit-frequency');
+            const weeklyDayGroup = this.container.querySelector('#new-habit-weekly-day-group');
+            if (freqSelect && weeklyDayGroup) {
+                freqSelect.addEventListener('change', (e) => {
+                    if (e.target.value === 'weekly') {
+                        weeklyDayGroup.style.display = 'block';
+                    } else {
+                        weeklyDayGroup.style.display = 'none';
+                    }
+                });
+            }
+
             newForm.addEventListener('submit', (e) => {
                 e.preventDefault();
                 const createdHabit = {
@@ -2790,10 +2951,13 @@ const Blueprint = {
                     twoMinuteVersion: this.container.querySelector('#new-habit-twomin').value.trim(),
                     stackTrigger: this.container.querySelector('#new-habit-trigger').value.trim(),
                     cue: this.container.querySelector('#new-habit-cue').value.trim(),
-                    reward: this.container.querySelector('#new-habit-reward').value.trim()
+                    reward: this.container.querySelector('#new-habit-reward').value.trim(),
+                    frequency: this.container.querySelector('#new-habit-frequency').value,
+                    weeklyDay: parseInt(this.container.querySelector('#new-habit-weekly-day').value)
                 };
                 db.saveHabit(createdHabit);
                 newForm.reset();
+                if (weeklyDayGroup) weeklyDayGroup.style.display = 'none';
                 // Reset color picker to first option
                 colorBtns.forEach(b => { b.style.borderColor = 'transparent'; b.classList.remove('active'); });
                 if (colorBtns[0]) { colorBtns[0].style.borderColor = 'var(--primary)'; colorBtns[0].classList.add('active'); }
@@ -2855,7 +3019,7 @@ const Analytics = {
                     : 0;
                 
                 const logTime = new Date(dateStr).getTime() + (24 * 60 * 60 * 1000);
-                const activeHabitsOnDate = habits.filter(h => h.createdAt <= logTime);
+                const activeHabitsOnDate = habits.filter(h => h.createdAt <= logTime && isHabitActiveOnDate(h, dateStr));
                 
                 if (isGoodSleep) {
                     goodSleepCompletions += completionsCount;
@@ -2881,7 +3045,7 @@ const Analytics = {
             
             Object.keys(logs).forEach(dateStr => {
                 const logDate = new Date(dateStr).getTime() + (24 * 60 * 60 * 1000);
-                const activeIdHabits = idHabits.filter(h => h.createdAt <= logDate);
+                const activeIdHabits = idHabits.filter(h => h.createdAt <= logDate && isHabitActiveOnDate(h, dateStr));
                 
                 possible += activeIdHabits.length;
                 
@@ -3318,7 +3482,7 @@ const Analytics = {
             const mood = log.mood || 0;
             moodData.push(mood > 0 ? mood * 20 : null);
 
-            const activeHabitsOnDate = habits.filter(h => h.createdAt <= (d.getTime() + 24 * 60 * 60 * 1000));
+            const activeHabitsOnDate = habits.filter(h => h.createdAt <= (d.getTime() + 24 * 60 * 60 * 1000) && isHabitActiveOnDate(h, dateStr));
             const done = log.completions 
                 ? Object.keys(log.completions).filter(hId => activeHabitsOnDate.some(h => h.id === hId) && log.completions[hId].completed).length 
                 : 0;
@@ -4541,13 +4705,14 @@ class AppShell {
     updateSidebarStats() {
         const habits = db.getHabits();
         const todayStr = new Date().toISOString().split('T')[0];
+        const activeHabitsToday = habits.filter(h => isHabitActiveOnDate(h, todayStr));
         const log = db.getLogForDate(todayStr);
         
         const done = Object.keys(log.completions || {}).filter(hId => {
-            return habits.some(h => h.id === hId) && log.completions[hId].completed;
+            return activeHabitsToday.some(h => h.id === hId) && log.completions[hId].completed;
         }).length;
         
-        const pct = habits.length > 0 ? Math.round((done / habits.length) * 100) : 0;
+        const pct = activeHabitsToday.length > 0 ? Math.round((done / activeHabitsToday.length) * 100) : 0;
         
         const progressRing = document.querySelector('.progress-ring-circle');
         const textElement = document.querySelector('.progress-percentage');
@@ -4561,7 +4726,7 @@ class AppShell {
         }
 
         if (sidebarSubtitle) {
-            sidebarSubtitle.innerText = `${done} of ${habits.length} routines met today`;
+            sidebarSubtitle.innerText = `${done} of ${activeHabitsToday.length} routines met today`;
         }
 
         this.updateSidebarCoinWidget();

@@ -136,6 +136,14 @@ const TOOLS = [
         stackTrigger: {
           type: "string",
           description: "The immediate preceding trigger (Habit Stack: 'After I [Trigger Cue], I will [Habit]')."
+        },
+        frequency: {
+          type: "string",
+          description: "Frequency of the habit ('daily', 'weekdays', 'weekends', or 'weekly'). Default is 'daily'."
+        },
+        weeklyDay: {
+          type: "integer",
+          description: "If frequency is 'weekly', specifies the day of week (0 = Sunday, 1 = Monday, etc.). Default is 0."
         }
       },
       required: ["name", "identity", "cue", "reward", "twoMinuteVersion"]
