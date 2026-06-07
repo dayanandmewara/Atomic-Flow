@@ -1,6 +1,7 @@
 {
   "name": "AtomicFlow Habit Tracker",
   "short_name": "AtomicFlow",
+  "id": "atomicflow-habit-tracker",
   "description": "Premium local-first habit tracker & reflection journal based on 'Atomic Habits' by James Clear.",
   "start_url": "./index.html",
   "display": "standalone",
