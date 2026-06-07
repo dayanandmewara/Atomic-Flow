@@ -44,6 +44,25 @@ async function pushState(state) {
   return await response.json();
 }
 
+function isHabitActiveOnDate(habit, dateStr) {
+  if (!habit.frequency || habit.frequency === 'daily') return true;
+  
+  const date = new Date(dateStr);
+  const dayOfWeek = date.getDay(); // 0 = Sunday, 1 = Monday, etc.
+  
+  if (habit.frequency === 'weekdays') {
+    return dayOfWeek >= 1 && dayOfWeek <= 5;
+  }
+  if (habit.frequency === 'weekends') {
+    return dayOfWeek === 0 || dayOfWeek === 6;
+  }
+  if (habit.frequency === 'weekly') {
+    const targetDay = habit.weeklyDay !== undefined ? parseInt(habit.weeklyDay) : 0;
+    return dayOfWeek === targetDay;
+  }
+  return true;
+}
+
 // 2. Define Tools Metadata
 const TOOLS = [
   {
@@ -246,6 +265,72 @@ const TOOLS = [
         }
       },
       required: ["rewardId"]
+    }
+  },
+  {
+    name: "toggle_habit_completion",
+    description: "Mark a habit routine as completed or uncompleted for a specific date, awarding or deducting coins accordingly.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        date: {
+          type: "string",
+          description: "The target date in YYYY-MM-DD format."
+        },
+        id: {
+          type: "string",
+          description: "The unique ID of the habit routine to toggle completion."
+        },
+        completed: {
+          type: "boolean",
+          description: "The target completion state (true for completed, false for incomplete)."
+        },
+        isTwoMinute: {
+          type: "boolean",
+          description: "Optional. True if completing the 2-minute version of the habit (awards +1 coin instead of +2)."
+        }
+      },
+      required: ["date", "id", "completed"]
+    }
+  },
+  {
+    name: "toggle_habit_subaction",
+    description: "Mark a specific sub-action/checklist item of a habit routine as completed or uncompleted for a specific date, adjusting coins.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        date: {
+          type: "string",
+          description: "The target date in YYYY-MM-DD format."
+        },
+        habitId: {
+          type: "string",
+          description: "The unique ID of the parent habit routine."
+        },
+        subactionText: {
+          type: "string",
+          description: "The exact text content of the sub-action to complete."
+        },
+        completed: {
+          type: "boolean",
+          description: "The target completion state of the sub-action (true for completed, false for incomplete)."
+        }
+      },
+      required: ["date", "habitId", "subactionText", "completed"]
+    }
+  },
+  {
+    name: "delete_habit_routine",
+    description: "Deactivate or delete an existing habit routine so that it no longer appears in the user's checklist schedule.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        id: {
+          type: "string",
+          description: "The unique ID of the habit routine to delete."
+        }
+      },
+      required: ["id"]
     }
   }
 ];
@@ -520,6 +605,266 @@ function createServerInstance() {
             content: [{
               type: "text",
               text: `Success: Redeemed reward '${reward.name}'. Deducted ${reward.cost} coins. New balance: ${blueprints.coins} coins.`
+            }]
+          };
+        }
+
+        case "toggle_habit_completion": {
+          const dateStr = args.date;
+          const habitId = args.id;
+          const completed = args.completed;
+          const isTwoMinute = args.isTwoMinute || false;
+          
+          const habits = state.habits || [];
+          const habit = habits.find(h => h.id === habitId);
+          if (!habit) {
+            return {
+              content: [{ type: "text", text: `Error: Habit with ID '${habitId}' not found.` }],
+              isError: true
+            };
+          }
+          
+          state.logs = state.logs || {};
+          state.logs[dateStr] = state.logs[dateStr] || { completions: {} };
+          state.logs[dateStr].completions = state.logs[dateStr].completions || {};
+          const completions = state.logs[dateStr].completions;
+          
+          state.blueprints = state.blueprints || { coins: 0 };
+          state.blueprints.coins = state.blueprints.coins || 0;
+          
+          let coinsGained = 0;
+          const hasSubactions = habit.subactions && habit.subactions.length > 0;
+          
+          const wasCompleted = completions[habitId] && completions[habitId].completed;
+          
+          if (completed && !wasCompleted) {
+            // Check off
+            completions[habitId] = completions[habitId] || {};
+            completions[habitId].completed = true;
+            completions[habitId].isTwoMinute = isTwoMinute;
+            completions[habitId].completedAt = Date.now();
+            
+            if (hasSubactions) {
+              completions[habitId].subactions = completions[habitId].subactions || {};
+              habit.subactions.forEach(sub => {
+                if (!completions[habitId].subactions[sub]) {
+                  completions[habitId].subactions[sub] = true;
+                  coinsGained += 1;
+                }
+              });
+            } else {
+              coinsGained = isTwoMinute ? 1 : 2;
+            }
+          } else if (!completed && wasCompleted) {
+            // Uncheck
+            const wasTwoMinute = !!completions[habitId].isTwoMinute;
+            if (hasSubactions) {
+              completions[habitId].subactions = completions[habitId].subactions || {};
+              habit.subactions.forEach(sub => {
+                if (completions[habitId].subactions[sub]) {
+                  completions[habitId].subactions[sub] = false;
+                  coinsGained -= 1;
+                }
+              });
+            } else {
+              coinsGained = wasTwoMinute ? -1 : -2;
+            }
+            delete completions[habitId];
+          } else {
+            // No state change
+            return {
+              content: [{
+                type: "text",
+                text: `Info: Habit '${habit.name}' is already in completed=${completed} state. No coins adjusted. Balance: ${state.blueprints.coins} coins.`
+              }]
+            };
+          }
+          
+          state.blueprints.coins = Math.max(0, state.blueprints.coins + coinsGained);
+          state.blueprints.updatedAt = Date.now();
+          state.logs[dateStr].updatedAt = Date.now();
+          
+          // Check section completed bonus
+          let bonusMsg = "";
+          if (habit.timeOfDay && habit.timeOfDay !== 'all') {
+            const section = habit.timeOfDay;
+            state.logs[dateStr].sectionBonuses = state.logs[dateStr].sectionBonuses || {};
+            
+            const activeSectionHabits = habits.filter(h => h.active !== false && h.timeOfDay === section && isHabitActiveOnDate(h, dateStr));
+            
+            if (activeSectionHabits.length > 0) {
+              if (completed) {
+                const allSectionCompleted = activeSectionHabits.every(h => {
+                  if (h.id === habitId) return true;
+                  return completions[h.id] && completions[h.id].completed;
+                });
+                if (allSectionCompleted && !state.logs[dateStr].sectionBonuses[section]) {
+                  state.logs[dateStr].sectionBonuses[section] = true;
+                  state.blueprints.coins += 3;
+                  coinsGained += 3;
+                  bonusMsg = ` (+3 Section Bonus for ${section}!)`;
+                }
+              } else {
+                if (state.logs[dateStr].sectionBonuses[section]) {
+                  state.logs[dateStr].sectionBonuses[section] = false;
+                  state.blueprints.coins = Math.max(0, state.blueprints.coins - 3);
+                  coinsGained -= 3;
+                  bonusMsg = ` (-3 Section Bonus revoked for ${section})`;
+                }
+              }
+            }
+          }
+          
+          await pushState(state);
+          
+          return {
+            content: [{
+              type: "text",
+              text: `Success: Toggled completion for habit '${habit.name}' to ${completed}. Coins adjusted: ${coinsGained > 0 ? '+' : ''}${coinsGained}${bonusMsg}. New Balance: ${state.blueprints.coins} coins.`
+            }]
+          };
+        }
+
+        case "toggle_habit_subaction": {
+          const dateStr = args.date;
+          const habitId = args.habitId;
+          const subactionText = args.subactionText;
+          const completed = args.completed;
+          
+          const habits = state.habits || [];
+          const habit = habits.find(h => h.id === habitId);
+          if (!habit) {
+            return {
+              content: [{ type: "text", text: `Error: Habit with ID '${habitId}' not found.` }],
+              isError: true
+            };
+          }
+          
+          const hasSubaction = habit.subactions && habit.subactions.includes(subactionText);
+          if (!hasSubaction) {
+            return {
+              content: [{ type: "text", text: `Error: Habit does not have sub-action '${subactionText}'.` }],
+              isError: true
+            };
+          }
+          
+          state.logs = state.logs || {};
+          state.logs[dateStr] = state.logs[dateStr] || { completions: {} };
+          state.logs[dateStr].completions = state.logs[dateStr].completions || {};
+          const completions = state.logs[dateStr].completions;
+          
+          state.blueprints = state.blueprints || { coins: 0 };
+          state.blueprints.coins = state.blueprints.coins || 0;
+          
+          let coinsGained = 0;
+          completions[habitId] = completions[habitId] || { completed: false, isTwoMinute: false };
+          completions[habitId].subactions = completions[habitId].subactions || {};
+          
+          const wasSubCompleted = !!completions[habitId].subactions[subactionText];
+          
+          let parentChanged = false;
+          let isChecking = true;
+          
+          if (completed && !wasSubCompleted) {
+            completions[habitId].subactions[subactionText] = true;
+            coinsGained += 1;
+            
+            // Check if all sub-actions are now completed to auto-complete the parent habit
+            const allCompleted = habit.subactions.every(sub => completions[habitId].subactions[sub]);
+            if (allCompleted) {
+              completions[habitId].completed = true;
+              completions[habitId].completedAt = Date.now();
+              parentChanged = true;
+              isChecking = true;
+            }
+          } else if (!completed && wasSubCompleted) {
+            completions[habitId].subactions[subactionText] = false;
+            coinsGained -= 1;
+            
+            // If parent was completed, uncomplete it since a sub-action is now incomplete
+            if (completions[habitId].completed) {
+              completions[habitId].completed = false;
+              parentChanged = true;
+              isChecking = false;
+            }
+          } else {
+            // No state change
+            return {
+              content: [{
+                type: "text",
+                text: `Info: Sub-action '${subactionText}' is already in completed=${completed} state. No coins adjusted. Balance: ${state.blueprints.coins} coins.`
+              }]
+            };
+          }
+          
+          state.blueprints.coins = Math.max(0, state.blueprints.coins + coinsGained);
+          state.blueprints.updatedAt = Date.now();
+          state.logs[dateStr].updatedAt = Date.now();
+          
+          // Check section completed bonus (on parent change)
+          let bonusMsg = "";
+          if (parentChanged && habit.timeOfDay && habit.timeOfDay !== 'all') {
+            const section = habit.timeOfDay;
+            state.logs[dateStr].sectionBonuses = state.logs[dateStr].sectionBonuses || {};
+            
+            const activeSectionHabits = habits.filter(h => h.active !== false && h.timeOfDay === section && isHabitActiveOnDate(h, dateStr));
+            
+            if (activeSectionHabits.length > 0) {
+              if (isChecking) {
+                const allSectionCompleted = activeSectionHabits.every(h => {
+                  if (h.id === habitId) return true;
+                  return completions[h.id] && completions[h.id].completed;
+                });
+                if (allSectionCompleted && !state.logs[dateStr].sectionBonuses[section]) {
+                  state.logs[dateStr].sectionBonuses[section] = true;
+                  state.blueprints.coins += 3;
+                  coinsGained += 3;
+                  bonusMsg = ` (+3 Section Bonus for ${section}!)`;
+                }
+              } else {
+                if (state.logs[dateStr].sectionBonuses[section]) {
+                  state.logs[dateStr].sectionBonuses[section] = false;
+                  state.blueprints.coins = Math.max(0, state.blueprints.coins - 3);
+                  coinsGained -= 3;
+                  bonusMsg = ` (-3 Section Bonus revoked for ${section})`;
+                }
+              }
+            }
+          }
+          
+          await pushState(state);
+          
+          return {
+            content: [{
+              type: "text",
+              text: `Success: Toggled sub-action '${subactionText}' to ${completed}. Coins adjusted: ${coinsGained > 0 ? '+' : ''}${coinsGained}${bonusMsg}. New Balance: ${state.blueprints.coins} coins.`
+            }]
+          };
+        }
+
+        case "delete_habit_routine": {
+          const habitId = args.id;
+          const habits = state.habits || [];
+          
+          const index = habits.findIndex(h => h.id === habitId);
+          if (index === -1) {
+            return {
+              content: [{ type: "text", text: `Error: Habit with ID '${habitId}' not found.` }],
+              isError: true
+            };
+          }
+          
+          const habitName = habits[index].name;
+          habits[index].active = false;
+          habits[index].updatedAt = Date.now();
+          state.habits = habits;
+          
+          await pushState(state);
+          
+          return {
+            content: [{
+              type: "text",
+              text: `Success: Deleted habit routine '${habitName}' (ID: ${habitId}).`
             }]
           };
         }
