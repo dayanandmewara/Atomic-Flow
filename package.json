@@ -6,9 +6,13 @@
   "type": "module",
   "scripts": {
     "start": "node mcp-server.js",
-    "start:sse": "node mcp-server.js --sse"
+    "start:sse": "node mcp-server.js --sse",
+    "build": "node copy-assets.js"
   },
   "dependencies": {
+    "@capacitor/android": "^8.4.0",
+    "@capacitor/cli": "^8.4.0",
+    "@capacitor/core": "^8.4.0",
     "@modelcontextprotocol/sdk": "^1.4.0",
     "express": "^4.21.1"
   }

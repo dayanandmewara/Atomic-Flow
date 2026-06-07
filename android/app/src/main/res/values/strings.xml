@@ -1,0 +1,9 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">AtomicFlow</string>
+    <string name="title_activity_main">AtomicFlow</string>
+    <string name="package_name">app.netlify.dmhabits2</string>
+    <string name="custom_url_scheme">app.netlify.dmhabits2</string>
+    <string name="app_blocker_service_label">AtomicFlow App Blocker</string>
+    <string name="app_blocker_service_description">Monitors active apps and blocks distracting applications (e.g. social media) unless unlocked with gold coins earned from habits.</string>
+</resources>

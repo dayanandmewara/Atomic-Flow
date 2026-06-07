@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>AtomicFlow — Habit Tracker & Journal</title>
+    
+    <!-- Meta tags for premium SEO & branding -->
+    <meta name="description" content="AtomicFlow is a premium, Google-style habit tracker & daily micro-journal based on 'Atomic Habits' by James Clear, featuring cloud Google Sheets sync.">
+    <meta name="theme-color" content="#0d0d0f">
+    
+    <!-- iOS / PWA Support and Icons -->
+    <link rel="icon" type="image/png" href="icons/icon-192.png">
+    <link rel="apple-touch-icon" href="icons/icon-192.png">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    
+    <!-- Design System Core Style Sheets -->
+    <link rel="stylesheet" href="css/variables.css">
+    <link rel="stylesheet" href="css/base.css">
+    <link rel="stylesheet" href="css/layout.css">
+    <link rel="stylesheet" href="css/components.css">
+    <link rel="stylesheet" href="css/animations.css">
+    
+    <!-- PWA Web App Manifest -->
+    <link rel="manifest" href="manifest.json">
+    
+    <!-- External Interactive CDNs (Preloaded/Prefetched) -->
+    <!-- Lucide Sleek Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Premium Charting Engine -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Satisfying Confetti Engine -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+</head>
+<body>
+    
+    <!-- Main Application Wrapper -->
+    <div class="app-wrapper">
+        
+        <!-- Left Sidebar Navigation -->
+        <aside class="app-sidebar">
+            <div class="brand-section" style="width: 100%; display: flex; justify-content: space-between; align-items: center; box-sizing: border-box; padding-right: 1.25rem;">
+                <div style="display: flex; align-items: center; gap: 0.75rem;">
+                    <div class="brand-icon">
+                        <i data-lucide="sparkles" style="width: 22px; height: 22px;"></i>
+                    </div>
+                    <span class="brand-name">AtomicFlow</span>
+                </div>
+                <button id="btn-quick-lock" style="display: none; background: transparent; border: none; padding: 4px; cursor: pointer; color: var(--sidebar-text-muted); border-radius: 6px; align-items: center; justify-content: center;" title="Lock Application">
+                    <i data-lucide="lock" style="width: 15px; height: 15px;"></i>
+                </button>
+            </div>
+
+            <!-- Dynamic Sidebar Habit progress ring -->
+            <div class="sidebar-progress-card">
+                <div class="progress-ring-container">
+                    <svg width="56" height="56">
+                        <circle stroke="rgba(255,255,255,0.05)" stroke-width="4" fill="transparent" r="18" cx="28" cy="28"/>
+                        <circle class="progress-ring-circle" stroke="url(#sidebar-grad)" stroke-width="5" stroke-linecap="round" fill="transparent" r="18" cx="28" cy="28" 
+                            stroke-dasharray="113" stroke-dashoffset="113"/>
+                        <defs>
+                            <linearGradient id="sidebar-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" stop-color="#6366f1" />
+                                <stop offset="100%" stop-color="#a855f7" />
+                            </linearGradient>
+                        </defs>
+                    </svg>
+                    <div class="progress-percentage">0%</div>
+                </div>
+                <div class="progress-info">
+                    <h4>Flow Level</h4>
+                    <p>0 of 0 habits met today</p>
+                </div>
+            </div>
+
+            <!-- Main Navigation Links -->
+            <nav class="sidebar-nav">
+                <a href="#dashboard" class="nav-link active" data-view="dashboard">
+                    <i data-lucide="layout-dashboard"></i>
+                    <span>Dashboard</span>
+                </a>
+                <a href="#tasks" class="nav-link" data-view="tasks">
+                    <i data-lucide="check-square"></i>
+                    <span>Focus Tasks</span>
+                </a>
+                <a href="#journal" class="nav-link" data-view="journal">
+                    <i data-lucide="book-open"></i>
+                    <span>Journal Logs</span>
+                </a>
+                <a href="#blueprint" class="nav-link" data-view="blueprint">
+                    <i data-lucide="fingerprint"></i>
+                    <span>Blueprints</span>
+                </a>
+                <a href="#analytics" class="nav-link" data-view="analytics">
+                    <i data-lucide="bar-chart-2"></i>
+                    <span>Analytics</span>
+                </a>
+                <a href="#rewards" class="nav-link" data-view="rewards">
+                    <i data-lucide="gift"></i>
+                    <span>Rewards Shop</span>
+                </a>
+                <a href="#settings" class="nav-link" data-view="settings">
+                    <i data-lucide="sliders"></i>
+                    <span>Settings</span>
+                </a>
+            </nav>
+
+            <!-- Gamification Coin progression -->
+            <div class="xp-container" id="sidebar-coin-container" style="cursor: pointer; transition: all 0.25s ease; border: 1px solid rgba(251, 191, 36, 0.15); background: linear-gradient(135deg, rgba(245, 158, 11, 0.04) 0%, rgba(251, 191, 36, 0.01) 100%);">
+                <div style="display: flex; align-items: center; justify-content: space-between; width: 100%; gap: 10px;">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <span style="font-size: 1.6rem; animation: float 3s ease-in-out infinite; display: inline-block;">🪙</span>
+                        <div style="display: flex; flex-direction: column; gap: 2px;">
+                            <span id="sidebar-coin-text" style="font-size: 1.15rem; font-weight: 800; color: #fbbf24; text-shadow: 0 0 12px rgba(251, 191, 36, 0.25);">0 Coins</span>
+                            <span style="font-size: 0.65rem; color: var(--sidebar-text-muted); font-weight: 700; letter-spacing: 0.03em;">REWARDS BALANCE</span>
+                        </div>
+                    </div>
+                    <span style="background: linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%); color: #000; font-size: 0.68rem; font-weight: 800; border-radius: 12px; padding: 2px 8px; flex-shrink: 0; box-shadow: 0 2px 8px rgba(245, 158, 11, 0.25);">Shop &rarr;</span>
+                </div>
+            </div>
+
+            <!-- Sidebar footer / Quick theme info -->
+            <div class="sidebar-footer">
+                <div style="display: flex; align-items: center; justify-content: space-between; font-size: 0.75rem; color: var(--sidebar-text-muted);">
+                    <span class="theme-label">Atomic Tracker v1.0</span>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Right Content Section -->
+        <main class="app-content">
+            <!-- App Main Core Header -->
+            <header class="content-header">
+                <div class="welcome-msg">
+                    <h1>Good morning, <span class="text-gradient">Achiever</span>!</h1>
+                    <p>Focus on systems, not outcomes. Today is a new vote.</p>
+                </div>
+                <div class="header-actions">
+                    <div class="date-indicator">
+                        <i data-lucide="calendar" style="width: 16px; height: 16px; color: var(--primary);"></i>
+                        <span>May 24</span>
+                    </div>
+                </div>
+            </header>
+
+            <!-- Core Route Views Mount Root -->
+            <div id="view-content-root" class="animate-fade-in" style="width: 100%;">
+                <!-- Dynamic component injections render here -->
+            </div>
+        </main>
+        
+    </div>
+
+    <!-- Application Module Entry Point -->
+    <script src="js/app.js"></script>
+</body>
+</html>

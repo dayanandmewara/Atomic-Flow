@@ -1,0 +1,387 @@
+/* Layout structure: Sidebar, Content Grid, Mobile Adaptability */
+.app-wrapper {
+    display: flex;
+    min-height: 100vh;
+    width: 100%;
+}
+
+/* Sidebar Styling - Google Workspace Material Design Style */
+.app-sidebar {
+    width: 256px;
+    background-color: var(--bg-sidebar);
+    color: var(--sidebar-text);
+    padding: 1.5rem 0.5rem;
+    display: flex;
+    flex-direction: column;
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 100;
+    border-right: 1px solid var(--border-color);
+    transition: width var(--transition-normal);
+}
+
+.brand-section {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.5rem 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.brand-icon {
+    width: 32px;
+    height: 32px;
+    background: var(--grad-primary);
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #ffffff;
+    box-shadow: 0 2px 8px rgba(184, 240, 100, 0.25);
+}
+
+.brand-name {
+    font-family: var(--font-heading);
+    font-size: 1.25rem;
+    font-weight: 600;
+    letter-spacing: -0.25px;
+    color: var(--text-primary);
+}
+
+/* Sidebar progress card - Google-style neat flat box */
+.sidebar-progress-card {
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 0.75rem 1rem;
+    margin: 0 0.5rem 1.5rem 0.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.progress-ring-container {
+    position: relative;
+    width: 44px;
+    height: 44px;
+}
+
+.progress-ring-circle {
+    transition: stroke-dashoffset 0.35s;
+    transform: rotate(-90deg);
+    transform-origin: 50% 50%;
+}
+
+.progress-percentage {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 0.75rem;
+    font-weight: 700;
+    font-family: var(--font-heading);
+    color: var(--text-primary);
+}
+
+.progress-info h4 {
+    color: var(--text-primary);
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.progress-info p {
+    color: var(--text-secondary);
+    font-size: 0.72rem;
+    margin-top: 1px;
+}
+
+/* Navigation Links - Google-style capsule tabs */
+.sidebar-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    flex: 1;
+    padding: 0 0.25rem;
+}
+
+.nav-link {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.65rem 1.25rem;
+    color: var(--sidebar-text-muted);
+    font-weight: 500;
+    font-size: 0.92rem;
+    border-radius: 0 24px 24px 0; /* Google capsule list item shape */
+    cursor: pointer;
+    margin-right: 0.5rem;
+    transition: all var(--transition-fast);
+    border-left: 3px solid transparent;
+}
+
+.nav-link i {
+    font-size: 1.15rem;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.nav-link:hover {
+    color: var(--text-primary);
+    background: var(--bg-primary);
+}
+
+.nav-link.active {
+    color: var(--sidebar-active-text);
+    background: var(--sidebar-active-bg);
+    font-weight: 600;
+    border-left: 3px solid var(--primary);
+}
+
+/* Sidebar Footer */
+.sidebar-footer {
+    padding: 1rem 0.5rem 0.5rem 0.5rem;
+    border-top: 1px solid var(--border-color);
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+/* Content Container */
+.app-content {
+    flex: 1;
+    margin-left: 256px;
+    padding: 2rem 2.5rem;
+    min-height: 100vh;
+    max-width: calc(100vw - 256px);
+    transition: margin-left var(--transition-normal);
+}
+
+/* Content Header */
+.content-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
+    gap: 1.5rem;
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 1rem;
+}
+
+.welcome-msg h1 {
+    font-size: 1.75rem;
+    font-weight: 500; /* Google-style cleaner mid font weight */
+    margin-bottom: 0.25rem;
+    letter-spacing: -0.25px;
+    color: var(--text-primary);
+}
+
+.welcome-msg p {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+
+.header-actions {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+}
+
+.date-indicator {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    padding: 0.5rem 1rem;
+    border-radius: 20px; /* Google round badge */
+    font-weight: 500;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+/* Quick Warning Banner */
+.warning-banner {
+    background: #fdf2f2;
+    border: 1px solid #fbd5d5;
+    color: #9b1c1c;
+    padding: 0.75rem 1.25rem;
+    border-radius: var(--radius-md);
+    margin-bottom: 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-size: 0.88rem;
+    font-weight: 500;
+    animation: fadeIn 0.4s ease;
+}
+
+[data-theme="dark"] .warning-banner {
+    background: rgba(240, 82, 82, 0.1);
+    border-color: rgba(240, 82, 82, 0.2);
+    color: #f8b4b4;
+}
+
+/* Main layouts for different views */
+.view-grid {
+    display: grid;
+    grid-template-columns: repeat(12, 1fr);
+    gap: 1.5rem;
+}
+
+/* Responsive Breakpoints */
+@media (max-width: 1024px) {
+    .app-sidebar {
+        width: 72px;
+        padding: 1.5rem 0.25rem;
+        align-items: center;
+    }
+
+    .brand-name, 
+    .sidebar-progress-card, 
+    .nav-link span,
+    .sidebar-footer .theme-label,
+    .xp-container {
+        display: none !important;
+    }
+
+    .brand-section {
+        margin-bottom: 1.5rem;
+        justify-content: center;
+        padding: 0;
+    }
+
+    .nav-link {
+        justify-content: center;
+        padding: 0.65rem;
+        border-radius: 50%; /* Make round buttons when collapsed */
+        width: 48px;
+        height: 48px;
+        margin-right: 0;
+    }
+
+    .app-content {
+        margin-left: 72px;
+        max-width: calc(100vw - 72px);
+        padding: 1.5rem;
+    }
+}
+
+@media (max-width: 768px) {
+    .app-wrapper {
+        flex-direction: column;
+    }
+
+    .app-sidebar {
+        width: 100%;
+        height: auto;
+        position: fixed;
+        top: auto;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        flex-direction: row;
+        justify-content: space-around;
+        padding: 0.25rem 0.5rem;
+        border-right: none;
+        border-top: 1px solid var(--border-color);
+        box-shadow: 0 -2px 10px rgba(0,0,0,0.05);
+    }
+
+    .brand-section,
+    .sidebar-footer,
+    .sidebar-progress-card,
+    .xp-container {
+        display: none !important;
+    }
+
+    .sidebar-nav {
+        flex-direction: row;
+        width: 100%;
+        justify-content: space-around;
+        gap: 0;
+        padding: 0;
+    }
+
+    .nav-link {
+        flex-direction: column;
+        gap: 2px;
+        padding: 0.4rem;
+        font-size: 0.72rem;
+        color: var(--sidebar-text-muted);
+        border-radius: 8px;
+        margin-right: 0;
+        border-left: none;
+    }
+
+    .nav-link.active {
+        border-left: none;
+        background: var(--sidebar-active-bg);
+        color: var(--sidebar-active-text);
+    }
+
+    .app-content {
+        margin-left: 0;
+        padding: calc(1.25rem + env(safe-area-inset-top)) 1rem 5rem 1rem;
+        max-width: 100%;
+    }
+
+    .content-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.75rem;
+        margin-bottom: 1.25rem;
+    }
+
+    .welcome-msg h1 {
+        font-size: 1.5rem;
+    }
+
+    .header-actions {
+        width: 100%;
+        justify-content: space-between;
+    }
+
+    .view-grid {
+        grid-template-columns: 1fr;
+        gap: 1.25rem;
+    }
+}
+
+/* Responsive Grid Columns (V4 Mobile Upgrade) */
+.column-main {
+    grid-column: span 8;
+}
+
+.column-sidebar {
+    grid-column: span 4;
+}
+
+.column-half {
+    grid-column: span 6;
+}
+
+.column-quarter {
+    grid-column: span 3;
+}
+
+@media (max-width: 1024px) {
+    .column-main, .column-sidebar, .column-half {
+        grid-column: span 12 !important;
+    }
+    
+    .column-quarter {
+        grid-column: span 6 !important;
+    }
+}
+
+@media (max-width: 576px) {
+    .column-quarter {
+        grid-column: span 12 !important;
+    }
+}
+

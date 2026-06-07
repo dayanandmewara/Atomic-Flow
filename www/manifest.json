@@ -1,0 +1,54 @@
+{
+  "name": "AtomicFlow Habit Tracker",
+  "short_name": "AtomicFlow",
+  "id": "atomicflow-habit-tracker",
+  "description": "Premium local-first habit tracker & reflection journal based on 'Atomic Habits' by James Clear.",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#0d0d0f",
+  "theme_color": "#0d0d0f",
+  "orientation": "portrait-primary",
+  "scope": "./",
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-maskable-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Daily Journal",
+      "short_name": "Journal",
+      "description": "Log daily sleep and reflections",
+      "url": "./index.html#journal",
+      "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Rewards Shop",
+      "short_name": "Rewards",
+      "description": "Spend your saved coins",
+      "url": "./index.html#rewards",
+      "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}
