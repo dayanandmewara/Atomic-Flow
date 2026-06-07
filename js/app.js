@@ -158,6 +158,7 @@ class DatabaseManager {
             this._seedSampleData();
         }
         this.useProxy = !!this.settings.useNetlifyProxy;
+        this._healIdentityPillars();
     }
 
     _save(key, data) {
@@ -210,6 +211,7 @@ class DatabaseManager {
             this.habits.push(habit);
         }
         this._save('habits', this.habits);
+        this._healIdentityPillars();
         return habit;
     }
 
@@ -219,6 +221,32 @@ class DatabaseManager {
             this.habits[index].active = false;
             this.habits[index].updatedAt = Date.now();
             this._save('habits', this.habits);
+        }
+    }
+
+    _healIdentityPillars() {
+        let modified = false;
+        this.blueprints = this.blueprints || { identities: [], stacks: [] };
+        this.blueprints.identities = this.blueprints.identities || [];
+        
+        this.habits.forEach(habit => {
+            if (habit.active !== false && habit.identity && habit.identity.trim()) {
+                const idTitle = habit.identity.trim();
+                const exists = this.blueprints.identities.some(i => i.title && i.title.toLowerCase() === idTitle.toLowerCase());
+                if (!exists) {
+                    this.blueprints.identities.push({
+                        id: 'id_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+                        title: idTitle,
+                        proof: 'Reinforced by ' + habit.name
+                    });
+                    modified = true;
+                }
+            }
+        });
+        
+        if (modified) {
+            this.blueprints.updatedAt = Date.now();
+            this._save('blueprints', this.blueprints);
         }
     }
 
@@ -288,18 +316,53 @@ class DatabaseManager {
         const log = this.getLogForDate(dateStr);
         let coinsGained = 0;
         let isChecking = true;
+        
+        const habit = this.habits.find(h => h.id === habitId);
+        const hasSubactions = habit && habit.subactions && habit.subactions.length > 0;
 
         if (log.completions[habitId] && log.completions[habitId].completed) {
-            delete log.completions[habitId];
             isChecking = false;
-            coinsGained = -1;
+            const wasTwoMinute = !!log.completions[habitId].isTwoMinute;
+            if (hasSubactions) {
+                if (!log.completions[habitId].subactions) {
+                    log.completions[habitId].subactions = {};
+                }
+                habit.subactions.forEach(sub => {
+                    if (log.completions[habitId].subactions[sub]) {
+                        log.completions[habitId].subactions[sub] = false;
+                        coinsGained -= 1;
+                    }
+                });
+            } else {
+                coinsGained = wasTwoMinute ? -1 : -2;
+            }
+            delete log.completions[habitId];
         } else {
-            log.completions[habitId] = {
-                completed: true,
-                isTwoMinute: isTwoMinute,
-                completedAt: Date.now()
-            };
-            coinsGained = 1;
+            if (!log.completions[habitId]) {
+                log.completions[habitId] = {
+                    completed: true,
+                    isTwoMinute: isTwoMinute,
+                    completedAt: Date.now()
+                };
+            } else {
+                log.completions[habitId].completed = true;
+                log.completions[habitId].isTwoMinute = isTwoMinute;
+                log.completions[habitId].completedAt = Date.now();
+            }
+
+            if (hasSubactions) {
+                if (!log.completions[habitId].subactions) {
+                    log.completions[habitId].subactions = {};
+                }
+                habit.subactions.forEach(sub => {
+                    if (!log.completions[habitId].subactions[sub]) {
+                        log.completions[habitId].subactions[sub] = true;
+                        coinsGained += 1;
+                    }
+                });
+            } else {
+                coinsGained = isTwoMinute ? 1 : 2;
+            }
         }
         
         this.saveLogForDate(dateStr, log);
@@ -318,6 +381,76 @@ class DatabaseManager {
             isChecking, 
             sectionCompleted: bonusResult.sectionCompleted,
             sectionIncompleted: bonusResult.sectionIncompleted
+        };
+    }
+
+    toggleHabitSubaction(dateStr, habitId, subactionText, isChecked) {
+        const log = this.getLogForDate(dateStr);
+        if (!log.completions[habitId]) {
+            log.completions[habitId] = {
+                completed: false,
+                completedAt: null,
+                subactions: {}
+            };
+        }
+        if (!log.completions[habitId].subactions) {
+            log.completions[habitId].subactions = {};
+        }
+        
+        const wasChecked = !!log.completions[habitId].subactions[subactionText];
+        if (wasChecked === isChecked) {
+            return { log, coinsGained: 0, isChecking: isChecked, sectionCompleted: null };
+        }
+        
+        log.completions[habitId].subactions[subactionText] = isChecked;
+        let coinsGained = isChecked ? 1 : -1;
+        this.addCoins(coinsGained);
+        
+        // Check if all subactions of the habit are completed
+        const habit = this.habits.find(h => h.id === habitId);
+        let parentToggled = false;
+        let sectionCompleted = null;
+        let sectionIncompleted = null;
+
+        if (habit && habit.subactions && habit.subactions.length > 0) {
+            const allCompleted = habit.subactions.every(sub => !!log.completions[habitId].subactions[sub]);
+            const wasCompleted = log.completions[habitId].completed;
+            
+            if (allCompleted && !wasCompleted) {
+                log.completions[habitId].completed = true;
+                log.completions[habitId].completedAt = Date.now();
+                parentToggled = true;
+                
+                // Check section bonus
+                const bonusResult = this.checkSectionBonus(dateStr, habitId, true);
+                if (bonusResult.coinsGained !== 0) {
+                    this.addCoins(bonusResult.coinsGained);
+                    coinsGained += bonusResult.coinsGained;
+                }
+                sectionCompleted = bonusResult.sectionCompleted;
+            } else if (!allCompleted && wasCompleted) {
+                log.completions[habitId].completed = false;
+                log.completions[habitId].completedAt = null;
+                parentToggled = true;
+                
+                // Revert section bonus if applicable
+                const bonusResult = this.checkSectionBonus(dateStr, habitId, false);
+                if (bonusResult.coinsGained !== 0) {
+                    this.addCoins(bonusResult.coinsGained);
+                    coinsGained += bonusResult.coinsGained;
+                }
+                sectionIncompleted = bonusResult.sectionIncompleted;
+            }
+        }
+        
+        this.saveLogForDate(dateStr, log);
+        return { 
+            log, 
+            coinsGained, 
+            isChecking: isChecked, 
+            parentToggled, 
+            sectionCompleted, 
+            sectionIncompleted 
         };
     }
 
@@ -619,6 +752,7 @@ class DatabaseManager {
                 localStorage.setItem(DB_PREFIX + 'logs', JSON.stringify(this.logs));
                 databaseModified = true;
             }
+            this._healIdentityPillars();
             return databaseModified;
         }
 
@@ -716,6 +850,7 @@ class DatabaseManager {
             }
         }
 
+        this._healIdentityPillars();
         return localModified;
     }
 }
@@ -956,8 +1091,10 @@ const Dashboard = {
     activeFilter: 'all',
     activeTimeFilter: 'all', // 'all', 'morning', 'evening'
     activeTwoMinuteHabits: {},
+    activeTimers: {}, // Tracks running countdown intervals: habitId -> { secondsLeft, intervalId }
 
     render(container) {
+        this.clearAllTimers();
         this.selectedDate = new Date().toISOString().split('T')[0];
         this.activeFilter = 'all';
         
@@ -1145,9 +1282,18 @@ const Dashboard = {
             const completion = log.completions && log.completions[habit.id];
             const isCompleted = !!(completion && completion.completed);
             const isTwoMinuteSelected = completion ? completion.isTwoMinute : !!this.activeTwoMinuteHabits[habit.id];
+            const displayName = isTwoMinuteSelected && habit.twoMinuteVersion ? `⚡ ${habit.twoMinuteVersion} (2-Min)` : habit.name;
             const streak = AtomicManager.calculateStreak(habit.id);
             const isHot = streak.current >= 5;
             const cat = habit.category || 'other';
+
+            const activeTimer = this.activeTimers && this.activeTimers[habit.id];
+            const isTimerRunning = !!(activeTimer && activeTimer.intervalId);
+            const timerLabel = activeTimer ? this._formatTime(activeTimer.secondsLeft) : 'Start 2m';
+            const timerIcon = isTimerRunning ? 'pause' : 'play';
+            const timerStyle = isTimerRunning 
+                ? 'background: var(--grad-primary); border-color: transparent; color: #0d0d0f;' 
+                : 'background: rgba(99, 102, 241, 0.15); border-color: rgba(99, 102, 241, 0.3); color: var(--primary);';
             
             return `
                 <div class="habit-card habit-color-${cat} ${isCompleted ? 'completed' : ''} animate-fade-in" data-id="${habit.id}" style="position: relative;">
@@ -1156,10 +1302,25 @@ const Dashboard = {
                         <span class="checkmark"><i data-lucide="check" style="width: 12px; height: 12px;"></i></span>
                     </label>
 
+                    ${habit.twoMinuteVersion && (!habit.subactions || habit.subactions.length === 0) ? `
+                        <div style="display: flex; gap: 4px; align-items: center; flex-shrink: 0;">
+                            <button class="btn-twomin-toggle-compact ${isTwoMinuteSelected ? 'active' : ''}" style="background: ${isTwoMinuteSelected ? 'var(--grad-primary)' : 'rgba(255,255,255,0.03)'}; border: 1px solid ${isTwoMinuteSelected ? 'transparent' : 'var(--border-color)'}; color: ${isTwoMinuteSelected ? '#0d0d0f' : 'var(--text-muted)'}; padding: 3px 6px; border-radius: 8px; font-size: 0.65rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 3px; flex-shrink: 0; transition: all 0.2s;" title="Toggle 2-Minute Easy Version">
+                                <i data-lucide="zap" style="width: 10px; height: 10px; ${isTwoMinuteSelected ? 'fill: currentColor;' : ''}"></i>
+                                2-Min
+                            </button>
+                            ${isTwoMinuteSelected && !isCompleted ? `
+                                <button class="btn-habit-timer ${isTimerRunning ? 'running' : ''}" data-id="${habit.id}" style="${timerStyle} padding: 3px 6px; border-radius: 8px; font-size: 0.65rem; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 3px; flex-shrink: 0; transition: all 0.2s;" title="${isTimerRunning ? 'Pause Timer' : 'Start Timer'}">
+                                    <i data-lucide="${timerIcon}" style="width: 10px; height: 10px;"></i>
+                                    <span class="timer-label">${timerLabel}</span>
+                                </button>
+                            ` : ''}
+                        </div>
+                    ` : ''}
+
                     <div class="habit-details" style="display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1;">
                         <span class="habit-color-dot dot-${cat}"></span>
                         <div style="display: flex; flex-direction: column; min-width: 0;">
-                            <span class="habit-name" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 500;">${habit.name}</span>
+                            <span class="habit-name" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 500;">${displayName}</span>
                             ${habit.frequency && habit.frequency !== 'daily' ? `
                                 <span class="habit-freq-badge" style="font-size: 0.65rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase; margin-top: 1px;">
                                     ${habit.frequency === 'weekdays' ? '📅 Weekdays' : 
@@ -1183,6 +1344,28 @@ const Dashboard = {
                         </button>
                     </div>
 
+                    ${habit.subactions && habit.subactions.length > 0 ? `
+                        <div class="subactions-container" style="flex-basis: 100%; width: 100%; display: flex; flex-direction: column; gap: 0.4rem; padding-left: 2.25rem; border-left: 1px solid var(--border-color); margin-left: 0.75rem; margin-top: 0.25rem; margin-bottom: 0.25rem;">
+                            ${habit.subactions.map(sub => {
+                                const isSubCompleted = !!(completion && completion.subactions && completion.subactions[sub]);
+                                return `
+                                    <div class="subaction-row" data-sub-text="${sub}" style="display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;">
+                                        <label class="checkbox-wrapper" style="width: 16px; height: 16px; margin-bottom: 0; flex-shrink: 0;">
+                                            <input type="checkbox" class="subaction-check" ${isSubCompleted ? 'checked' : ''}>
+                                            <span class="checkmark" style="width: 16px; height: 16px; border-radius: 50%; border-width: 1px;"><i data-lucide="check" style="width: 8px; height: 8px;"></i></span>
+                                        </label>
+                                        <span style="flex: 1; font-size: 0.78rem; color: ${isSubCompleted ? 'var(--text-muted)' : 'var(--text-secondary)'}; text-decoration: ${isSubCompleted ? 'line-through' : 'none'}; transition: color 0.2s; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                                            ${sub}
+                                        </span>
+                                        ${isSubCompleted ? `
+                                            <span style="font-size: 0.6rem; color: #fbbf24; font-weight: 600; flex-shrink: 0; margin-left: 4px;">+1 🪙</span>
+                                        ` : ''}
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                    ` : ''}
+
                     <div class="habit-drawer hidden">
                         <div style="grid-column: span 1;">
                             <div class="drawer-section-title">1st Law: Make it Obvious</div>
@@ -1205,9 +1388,9 @@ const Dashboard = {
                         
                         <div style="grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: center; margin-top: 0.25rem; flex-wrap: wrap; gap: 0.5rem;">
                             ${habit.twoMinuteVersion ? `
-                                <button class="btn btn-secondary btn-twomin-trigger ${isTwoMinuteSelected ? 'active' : ''}" style="font-size: 0.7rem; padding: 2px 10px; border-radius: 12px;" title="Low energy alternative">
-                                    ⚡ ${isTwoMinuteSelected ? 'Normal Mode' : '2-Min Version'}
-                                </button>
+                                <span style="font-size: 0.7rem; color: var(--text-secondary); display: flex; align-items: center; gap: 4px; background: rgba(99,102,241,0.05); padding: 3px 8px; border-radius: var(--radius-sm); border: 1px solid rgba(99,102,241,0.1);">
+                                    ⚡ 2-Min target: "${habit.twoMinuteVersion}"
+                                </span>
                             ` : '<span></span>'}
                             <div style="display: flex; gap: 6px;">
                                 <button class="btn btn-secondary btn-edit-habit" style="padding: 0.2rem 0.5rem; font-size: 0.68rem; border-color: rgba(99,102,241,0.15); color: var(--primary);"><i data-lucide="edit-3" style="width: 10px; height: 10px;"></i> Edit</button>
@@ -1353,7 +1536,7 @@ const Dashboard = {
             const drawer = card.querySelector('.habit-drawer');
             
             const handleToggle = (e) => {
-                if (e.target.closest('.checkbox-wrapper') || e.target.closest('.btn-twomin-trigger') || e.target.closest('.btn-delete-habit')) return;
+                if (e.target.closest('.checkbox-wrapper') || e.target.closest('.btn-twomin-toggle-compact') || e.target.closest('.btn-delete-habit')) return;
                 const isHidden = drawer.classList.contains('hidden');
                 
                 this.container.querySelectorAll('.habit-drawer').forEach(d => d.classList.add('hidden'));
@@ -1396,25 +1579,43 @@ const Dashboard = {
         });
 
         cards.forEach(card => {
-            const tmBtn = card.querySelector('.btn-twomin-trigger');
+            const tmBtn = card.querySelector('.btn-twomin-toggle-compact');
             if (tmBtn) {
-                tmBtn.addEventListener('click', () => {
+                tmBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
                     const habitId = card.getAttribute('data-id');
                     const habit = db.getHabits().find(h => h.id === habitId);
-                    const desc = card.querySelector('.habit-desc');
+                    
+                    const completion = db.getLogForDate(this.selectedDate).completions[habitId];
+                    if (completion && completion.completed) {
+                        showGlobalToast("Uncheck the habit first to adjust modes!");
+                        return;
+                    }
                     
                     const wasActive = !!this.activeTwoMinuteHabits[habitId];
                     if (wasActive) {
                         delete this.activeTwoMinuteHabits[habitId];
-                        tmBtn.classList.remove('active');
-                        tmBtn.innerText = "⚡ 2-Min";
-                        desc.innerHTML = habit.stackTrigger ? `After I <strong>${habit.stackTrigger}</strong>, I will complete this.` : 'Repetitions build identity.';
+                        if (this.activeTimers && this.activeTimers[habitId]) {
+                            if (this.activeTimers[habitId].intervalId) {
+                                clearInterval(this.activeTimers[habitId].intervalId);
+                            }
+                            delete this.activeTimers[habitId];
+                        }
+                        showGlobalToast("Normal mode activated.");
                     } else {
                         this.activeTwoMinuteHabits[habitId] = true;
-                        tmBtn.classList.add('active');
-                        tmBtn.innerText = "⚡ Normal";
-                        desc.innerHTML = `<strong style="color: var(--primary);">⚡ 2-Min Version Active:</strong> ${habit.twoMinuteVersion}`;
+                        showGlobalToast(`2-Min version active: "${habit.twoMinuteVersion}"`);
                     }
+                    this.updateView();
+                });
+            }
+
+            const timerBtn = card.querySelector('.btn-habit-timer');
+            if (timerBtn) {
+                timerBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const habitId = card.getAttribute('data-id');
+                    this.toggleHabitTimer(habitId);
                 });
             }
         });
@@ -1424,6 +1625,14 @@ const Dashboard = {
             check.addEventListener('change', (e) => {
                 const habitId = card.getAttribute('data-id');
                 const isTwoMinute = !!this.activeTwoMinuteHabits[habitId];
+
+                // Stop and delete any running timer for this habit if manually checked/unchecked
+                if (this.activeTimers && this.activeTimers[habitId]) {
+                    if (this.activeTimers[habitId].intervalId) {
+                        clearInterval(this.activeTimers[habitId].intervalId);
+                    }
+                    delete this.activeTimers[habitId];
+                }
 
                 if (e.target.checked) {
                     card.classList.add('completed');
@@ -1448,6 +1657,39 @@ const Dashboard = {
                     this.updateView();
                     this._updateSidebarProgress();
                 }, 400);
+            });
+
+            // Subaction check listener
+            const subChecks = card.querySelectorAll('.subaction-check');
+            subChecks.forEach(subCheck => {
+                subCheck.addEventListener('change', (e) => {
+                    const habitId = card.getAttribute('data-id');
+                    const subRow = subCheck.closest('.subaction-row');
+                    const subText = subRow.getAttribute('data-sub-text');
+                    const isChecked = e.target.checked;
+                    
+                    const { coinsGained, isChecking, parentToggled, sectionCompleted, sectionIncompleted } = db.toggleHabitSubaction(this.selectedDate, habitId, subText, isChecked);
+                    
+                    if (isChecked) {
+                        subRow.classList.add('animate-pop');
+                        this._playConfetti();
+                    }
+                    
+                    this._floatCoinNotification(card, coinsGained, isChecking);
+                    
+                    if (sectionCompleted) {
+                        setTimeout(() => {
+                            this._playConfetti();
+                            const sectionName = sectionCompleted.charAt(0).toUpperCase() + sectionCompleted.slice(1);
+                            showGlobalToast(`${sectionName} routines completed! +3 Coins Bonus! 🪙`);
+                        }, 500);
+                    }
+                    
+                    setTimeout(() => {
+                        this.updateView();
+                        this._updateSidebarProgress();
+                    }, 400);
+                });
             });
         });
 
@@ -1544,6 +1786,132 @@ const Dashboard = {
                 origin: { y: 0.75, x: 0.5 },
                 colors: ['#b8f064', '#8fd43a', '#f5b942', '#f06464']
             });
+        }
+    },
+
+    clearAllTimers() {
+        if (this.activeTimers) {
+            Object.keys(this.activeTimers).forEach(habitId => {
+                if (this.activeTimers[habitId].intervalId) {
+                    clearInterval(this.activeTimers[habitId].intervalId);
+                }
+            });
+        }
+        this.activeTimers = {};
+    },
+
+    _formatTime(seconds) {
+        const mins = Math.floor(seconds / 60);
+        const secs = seconds % 60;
+        return `${mins}:${secs.toString().padStart(2, '0')}`;
+    },
+
+    toggleHabitTimer(habitId) {
+        if (!this.activeTimers) this.activeTimers = {};
+        
+        const timer = this.activeTimers[habitId];
+        
+        if (timer && timer.intervalId) {
+            // Pause
+            clearInterval(timer.intervalId);
+            timer.intervalId = null;
+            this.updateView();
+            showGlobalToast("Timer paused.");
+        } else {
+            // Start/Resume
+            let secondsLeft = 120; // 2 minutes
+            if (timer) {
+                secondsLeft = timer.secondsLeft;
+            } else {
+                this.activeTimers[habitId] = { secondsLeft: 120, intervalId: null };
+            }
+            
+            showGlobalToast("2-Minute timer started! Focus on the habit...");
+            
+            const intervalId = setInterval(() => {
+                const activeTimer = this.activeTimers[habitId];
+                if (!activeTimer) {
+                    clearInterval(intervalId);
+                    return;
+                }
+                
+                activeTimer.secondsLeft--;
+                
+                // Live update the button text in the DOM
+                const btn = this.container.querySelector(`.btn-habit-timer[data-id="${habitId}"]`);
+                if (btn) {
+                    const label = btn.querySelector('.timer-label');
+                    if (label) label.innerText = this._formatTime(activeTimer.secondsLeft);
+                }
+                
+                if (activeTimer.secondsLeft <= 0) {
+                    clearInterval(intervalId);
+                    delete this.activeTimers[habitId];
+                    this.completeHabitViaTimer(habitId);
+                }
+            }, 1000);
+            
+            this.activeTimers[habitId].intervalId = intervalId;
+            this.updateView();
+        }
+    },
+
+    completeHabitViaTimer(habitId) {
+        this._playSuccessTone();
+        const isTwoMinute = true;
+        const { coinsGained, isChecking, sectionCompleted } = db.toggleHabitCompletion(this.selectedDate, habitId, isTwoMinute);
+        
+        this._playConfetti();
+        showGlobalToast("2-Min Rule accomplished! +1 Coin gained! ⚡ 🪙");
+        
+        if (sectionCompleted) {
+            setTimeout(() => {
+                this._playConfetti();
+                const sectionName = sectionCompleted.charAt(0).toUpperCase() + sectionCompleted.slice(1);
+                showGlobalToast(`${sectionName} routines completed! +3 Coins Bonus! 🪙`);
+            }, 500);
+        }
+        
+        this.updateView();
+        this._updateSidebarProgress();
+    },
+
+    _playSuccessTone() {
+        try {
+            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            
+            // Tone 1
+            const osc1 = ctx.createOscillator();
+            const gain1 = ctx.createGain();
+            osc1.type = 'sine';
+            osc1.frequency.setValueAtTime(523.25, ctx.currentTime); // C5
+            osc1.frequency.exponentialRampToValueAtTime(783.99, ctx.currentTime + 0.15); // G5
+            
+            gain1.gain.setValueAtTime(0.12, ctx.currentTime);
+            gain1.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+            
+            osc1.connect(gain1);
+            gain1.connect(ctx.destination);
+            osc1.start();
+            osc1.stop(ctx.currentTime + 0.3);
+            
+            // Tone 2 (delayed)
+            setTimeout(() => {
+                const osc2 = ctx.createOscillator();
+                const gain2 = ctx.createGain();
+                osc2.type = 'sine';
+                osc2.frequency.setValueAtTime(1046.50, ctx.currentTime); // C6
+                
+                gain2.gain.setValueAtTime(0.12, ctx.currentTime);
+                gain2.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.4);
+                
+                osc2.connect(gain2);
+                gain2.connect(ctx.destination);
+                osc2.start();
+                osc2.stop(ctx.currentTime + 0.4);
+            }, 120);
+        } catch (e) {
+            console.error("Audio chime playback blocked or unsupported:", e);
         }
     },
 
@@ -1657,13 +2025,18 @@ const Dashboard = {
                 </div>
 
                 <div class="form-group" style="margin-bottom: 0;">
-                    <label style="font-size: 0.75rem; font-weight: 600;">2-Minute Version</label>
-                    <input type="text" id="edit-habit-twomin" class="form-control" style="font-size: 0.82rem; padding: 0.45rem 0.65rem;" value="${habit.twoMinuteVersion || ''}" required>
+                    <label style="font-size: 0.75rem; font-weight: 600;">2-Minute Version (Optional)</label>
+                    <input type="text" id="edit-habit-twomin" class="form-control" style="font-size: 0.82rem; padding: 0.45rem 0.65rem;" value="${habit.twoMinuteVersion || ''}" placeholder="Leave blank if already < 2m (e.g. take a pill)">
                 </div>
 
                 <div class="form-group" style="margin-bottom: 0;">
                     <label style="font-size: 0.75rem; font-weight: 600;">Immediate Reward</label>
                     <input type="text" id="edit-habit-reward" class="form-control" style="font-size: 0.82rem; padding: 0.45rem 0.65rem;" value="${habit.reward || ''}" required>
+                </div>
+
+                <div class="form-group" style="margin-bottom: 0;">
+                    <label style="font-size: 0.75rem; font-weight: 600;">Sub-actions / Checklist (Optional, one per line)</label>
+                    <textarea id="edit-habit-subactions" class="form-control" style="font-size: 0.82rem; padding: 0.45rem 0.65rem; height: 60px; resize: vertical;" placeholder="e.g. Supplement A&#10;Supplement B">${(habit.subactions || []).join('\n')}</textarea>
                 </div>
 
                 <button type="submit" class="btn btn-primary" style="margin-top: 0.5rem; padding: 0.5rem 1.25rem; font-size: 0.82rem; border-radius: 12px; font-weight: 600;"><i data-lucide="check"></i> Save Changes</button>
@@ -1707,7 +2080,8 @@ const Dashboard = {
                 twoMinuteVersion: modal.querySelector('#edit-habit-twomin').value.trim(),
                 reward: modal.querySelector('#edit-habit-reward').value.trim(),
                 frequency: modal.querySelector('#edit-habit-frequency').value,
-                weeklyDay: parseInt(modal.querySelector('#edit-habit-weekly-day').value)
+                weeklyDay: parseInt(modal.querySelector('#edit-habit-weekly-day').value),
+                subactions: modal.querySelector('#edit-habit-subactions').value.trim().split('\n').map(s => s.trim()).filter(Boolean)
             };
 
             db.saveHabit(updatedHabit);
@@ -2152,11 +2526,25 @@ const FocusTasks = {
                         <div class="glass-card" style="padding: 1.5rem; border-radius: var(--radius-md); width: 100%; box-sizing: border-box;">
                             
                             <!-- Add task form -->
-                            <form id="new-task-form" style="display: flex; gap: 0.75rem; margin-bottom: 1.5rem;">
-                                <input type="text" id="task-input-text" class="form-control" placeholder="What is your focus right now? e.g. Buy groceries, Read 5 pages..." style="flex: 1; font-size: 0.85rem; border-radius: 20px; padding: 0.6rem 1rem;" required>
-                                <button type="submit" class="btn btn-primary" style="border-radius: 20px; padding: 0.6rem 1.25rem; font-size: 0.82rem; font-weight: 600;">
-                                    <i data-lucide="plus" style="width: 16px; height: 16px;"></i> Add Focus
-                                </button>
+                            <form id="new-task-form" style="display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 1.5rem;">
+                                <div style="display: flex; gap: 0.75rem;">
+                                    <input type="text" id="task-input-text" class="form-control" placeholder="What is your focus right now? e.g. Buy groceries, Read 5 pages..." style="flex: 1; font-size: 0.85rem; border-radius: 20px; padding: 0.6rem 1rem;" required>
+                                    <button type="button" id="btn-toggle-subtasks" class="btn btn-secondary" style="border-radius: 20px; padding: 0.6rem 1rem; font-size: 0.82rem; font-weight: 600;" title="Split into subtasks">
+                                        <i data-lucide="list-plus" style="width: 16px; height: 16px;"></i> Break Down
+                                    </button>
+                                    <button type="submit" class="btn btn-primary" style="border-radius: 20px; padding: 0.6rem 1.25rem; font-size: 0.82rem; font-weight: 600;">
+                                        <i data-lucide="plus" style="width: 16px; height: 16px;"></i> Add Focus
+                                    </button>
+                                </div>
+                                <div id="subtasks-input-group" style="display: none; background: rgba(255, 255, 255, 0.02); border: 1px dashed var(--border-color); border-radius: 12px; padding: 0.75rem; margin-top: 0.25rem;">
+                                    <label style="font-size: 0.75rem; font-weight: 600; color: var(--text-secondary); display: block; margin-bottom: 0.4rem;">
+                                        Micro-steps / Subtasks (Optional — enter one per line or use commas):
+                                    </label>
+                                    <textarea id="task-subtasks-text" class="form-control" placeholder="e.g.&#10;Clean bedroom&#10;Clean kitchen&#10;Vacuum hallway" style="width: 100%; min-height: 80px; font-size: 0.8rem; border-radius: 8px; padding: 0.5rem; font-family: inherit; resize: vertical; background: var(--bg-primary); border: 1px solid var(--border-color); color: var(--text-primary);"></textarea>
+                                    <span style="font-size: 0.68rem; color: var(--text-muted); display: block; margin-top: 4px;">
+                                        💡 Tip: Ticking each subtask completed awards +1 Coin 🪙!
+                                    </span>
+                                </div>
                             </form>
 
                             <!-- Tasks list container -->
@@ -2217,20 +2605,61 @@ const FocusTasks = {
 
         // New task form submission
         const taskForm = this.container.querySelector('#new-task-form');
-        taskForm.addEventListener('submit', (e) => {
-            e.preventDefault();
-            const input = this.container.querySelector('#task-input-text');
-            const val = input.value.trim();
-            if (val) {
-                db.saveTask({
-                    text: val,
-                    date: this.selectedDate
+        if (taskForm) {
+            const toggleBtn = this.container.querySelector('#btn-toggle-subtasks');
+            const subtasksGroup = this.container.querySelector('#subtasks-input-group');
+            const subtaskTextArea = this.container.querySelector('#task-subtasks-text');
+
+            if (toggleBtn && subtasksGroup) {
+                toggleBtn.addEventListener('click', () => {
+                    const isHidden = subtasksGroup.style.display === 'none';
+                    subtasksGroup.style.display = isHidden ? 'block' : 'none';
+                    if (isHidden && subtaskTextArea) {
+                        subtaskTextArea.focus();
+                    }
                 });
-                input.value = '';
-                this._refreshTasksList();
-                this._updateSidebarProgress();
             }
-        });
+
+            taskForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                const input = this.container.querySelector('#task-input-text');
+                const val = input.value.trim();
+                const subtasksVal = subtaskTextArea ? subtaskTextArea.value.trim() : '';
+
+                if (val) {
+                    const subtasks = [];
+                    if (subtasksVal) {
+                        let lines = subtasksVal.split(/\r?\n/);
+                        if (lines.length === 1 && lines[0].includes(',')) {
+                            lines = lines[0].split(',');
+                        }
+                        lines.forEach((line, idx) => {
+                            const cleanLine = line.trim();
+                            if (cleanLine) {
+                                subtasks.push({
+                                    id: 'sub_' + Date.now() + '_' + idx,
+                                    text: cleanLine,
+                                    completed: false
+                                });
+                            }
+                        });
+                    }
+
+                    db.saveTask({
+                        text: val,
+                        date: this.selectedDate,
+                        subtasks: subtasks.length > 0 ? subtasks : undefined
+                    });
+
+                    input.value = '';
+                    if (subtaskTextArea) subtaskTextArea.value = '';
+                    if (subtasksGroup) subtasksGroup.style.display = 'none';
+
+                    this._refreshTasksList();
+                    this._updateSidebarProgress();
+                }
+            });
+        }
     },
 
     _renderTasksListMarkup(dateStr) {
@@ -2261,27 +2690,71 @@ const FocusTasks = {
             badge.innerText = `${completed} / ${tasks.length} Done`;
         }
 
-        return tasks.map(task => `
-            <div class="animate-fade-in task-item-row" data-id="${task.id}" style="display: flex; align-items: center; justify-content: space-between; background: rgba(255,255,255,0.01); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.5rem 0.75rem; transition: background 0.2s, opacity 0.5s, transform 0.5s;">
-                <label class="checkbox-wrapper" style="width: 20px; height: 20px; margin-bottom: 0; flex-shrink: 0;">
-                    <input type="checkbox" class="task-check" ${task.completed ? 'checked' : ''}>
-                    <span class="checkmark" style="width: 20px; height: 20px; border-radius: 4px; border-width: 1px;"><i data-lucide="check" style="width: 10px; height: 10px;"></i></span>
-                </label>
-                
-                <span class="task-text" style="flex: 1; font-size: 0.85rem; margin-left: 0.75rem; color: ${task.completed ? 'var(--text-muted)' : 'var(--text-primary)'}; text-decoration: ${task.completed ? 'line-through' : 'none'}; transition: color 0.2s;">
-                    ${task.text}
-                </span>
+        return tasks.map(task => {
+            const hasSubtasks = task.subtasks && task.subtasks.length > 0;
+            const completedSubtasksCount = hasSubtasks ? task.subtasks.filter(s => s.completed).length : 0;
+            const subtaskProgressPct = hasSubtasks ? Math.round((completedSubtasksCount / task.subtasks.length) * 100) : 0;
 
-                <div style="display: flex; align-items: center; gap: 8px;">
-                    ${task.completed ? `
-                        <span style="font-size: 0.65rem; font-weight: 700; color: #fbbf24; background: rgba(251,191,36,0.05); padding: 1px 6px; border-radius: 4px; border: 1px solid rgba(251,191,36,0.15);">
-                            +1 Coin 🪙
-                        </span>
+            return `
+                <div class="animate-fade-in task-item-row" data-id="${task.id}" style="display: flex; flex-direction: column; background: rgba(255,255,255,0.01); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.5rem 0.75rem; transition: background 0.2s, opacity 0.5s, transform 0.5s; gap: 0.5rem;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
+                        <div class="task-reorder-buttons" style="display: flex; flex-direction: column; gap: 2px; margin-right: 6px; flex-shrink: 0;">
+                            <button class="btn-task-up" style="background: transparent; border: none; padding: 1px; color: var(--text-muted); cursor: pointer; height: auto;" title="Move Up"><i data-lucide="chevron-up" style="width: 12px; height: 12px;"></i></button>
+                            <button class="btn-task-down" style="background: transparent; border: none; padding: 1px; color: var(--text-muted); cursor: pointer; height: auto;" title="Move Down"><i data-lucide="chevron-down" style="width: 12px; height: 12px;"></i></button>
+                        </div>
+
+                        <label class="checkbox-wrapper" style="width: 20px; height: 20px; margin-bottom: 0; flex-shrink: 0;">
+                            <input type="checkbox" class="task-check" ${task.completed ? 'checked' : ''}>
+                            <span class="checkmark" style="width: 20px; height: 20px; border-radius: 4px; border-width: 1px;"><i data-lucide="check" style="width: 10px; height: 10px;"></i></span>
+                        </label>
+                        
+                        <div style="flex: 1; display: flex; flex-direction: column; margin-left: 0.75rem; min-width: 0;">
+                            <span class="task-text" style="font-size: 0.85rem; font-weight: 500; color: ${task.completed ? 'var(--text-muted)' : 'var(--text-primary)'}; text-decoration: ${task.completed ? 'line-through' : 'none'}; transition: color 0.2s;">
+                                ${task.text}
+                            </span>
+                            ${hasSubtasks ? `
+                                <div style="display: flex; align-items: center; gap: 8px; margin-top: 4px;">
+                                    <div style="flex: 1; height: 4px; background: rgba(255,255,255,0.05); border-radius: 2px; overflow: hidden;">
+                                        <div style="width: ${subtaskProgressPct}%; height: 100%; background: var(--primary); transition: width 0.3s ease;"></div>
+                                    </div>
+                                    <span style="font-size: 0.68rem; color: var(--text-muted); font-weight: 600; white-space: nowrap;">
+                                        ${completedSubtasksCount} / ${task.subtasks.length} Steps (${subtaskProgressPct}%)
+                                    </span>
+                                </div>
+                            ` : ''}
+                        </div>
+
+                        <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0; margin-left: 0.5rem;">
+                            ${task.completed ? `
+                                <span style="font-size: 0.65rem; font-weight: 700; color: #fbbf24; background: rgba(251,191,36,0.05); padding: 1px 6px; border-radius: 4px; border: 1px solid rgba(251,191,36,0.15);">
+                                    Done 🪙
+                                </span>
+                            ` : ''}
+                            <button class="btn-delete-task" style="background: transparent; border: none; cursor: pointer; color: var(--text-muted); padding: 2px;" title="Delete Task"><i data-lucide="trash-2" style="width: 14px; height: 14px;"></i></button>
+                        </div>
+                    </div>
+
+                    ${hasSubtasks ? `
+                        <div class="subtasks-container" style="display: flex; flex-direction: column; gap: 0.4rem; padding-left: 2.25rem; border-left: 1px solid var(--border-color); margin-left: 0.75rem; margin-top: 0.25rem; margin-bottom: 0.25rem;">
+                            ${task.subtasks.map(subtask => `
+                                <div class="subtask-row" data-sub-id="${subtask.id}" style="display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;">
+                                    <label class="checkbox-wrapper" style="width: 16px; height: 16px; margin-bottom: 0; flex-shrink: 0;">
+                                        <input type="checkbox" class="subtask-check" ${subtask.completed ? 'checked' : ''} ${task.completed ? 'disabled' : ''}>
+                                        <span class="checkmark" style="width: 16px; height: 16px; border-radius: 3px; border-width: 1px;"><i data-lucide="check" style="width: 8px; height: 8px;"></i></span>
+                                    </label>
+                                    <span style="flex: 1; font-size: 0.78rem; color: ${subtask.completed ? 'var(--text-muted)' : 'var(--text-secondary)'}; text-decoration: ${subtask.completed ? 'line-through' : 'none'}; transition: color 0.2s; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                                        ${subtask.text}
+                                    </span>
+                                    ${subtask.completed ? `
+                                        <span style="font-size: 0.6rem; color: #fbbf24; font-weight: 600; flex-shrink: 0; margin-left: 4px;">+1 🪙</span>
+                                    ` : ''}
+                                </div>
+                            `).join('')}
+                        </div>
                     ` : ''}
-                    <button class="btn-delete-task" style="background: transparent; border: none; cursor: pointer; color: var(--text-muted); padding: 2px;"><i data-lucide="trash-2" style="width: 14px; height: 14px;"></i></button>
                 </div>
-            </div>
-        `).join('');
+            `;
+        }).join('');
     },
 
     _refreshTasksList() {
@@ -2299,17 +2772,49 @@ const FocusTasks = {
             const taskId = row.getAttribute('data-id');
             const check = row.querySelector('.task-check');
             const deleteBtn = row.querySelector('.btn-delete-task');
+            const upBtn = row.querySelector('.btn-task-up');
+            const downBtn = row.querySelector('.btn-task-down');
+            const subchecks = row.querySelectorAll('.subtask-check');
+
+            if (upBtn) {
+                upBtn.addEventListener('click', () => {
+                    this._reorderTask(taskId, 'up');
+                });
+            }
+
+            if (downBtn) {
+                downBtn.addEventListener('click', () => {
+                    this._reorderTask(taskId, 'down');
+                });
+            }
             
             if (check) {
                 check.addEventListener('change', (e) => {
                     const tasks = db.getTasks();
                     const task = tasks.find(t => t.id === taskId);
                     if (task) {
-                        task.completed = e.target.checked;
+                        const isChecking = e.target.checked;
+                        let coinsGained = 0;
+
+                        if (task.subtasks && task.subtasks.length > 0) {
+                            task.subtasks.forEach(s => {
+                                if (isChecking && !s.completed) {
+                                    s.completed = true;
+                                    coinsGained++;
+                                } else if (!isChecking && s.completed) {
+                                    s.completed = false;
+                                    coinsGained--;
+                                }
+                            });
+                        } else {
+                            coinsGained = isChecking ? 1 : -1;
+                        }
+
+                        task.completed = isChecking;
                         db.saveTask(task);
+                        db.addCoins(coinsGained);
                         
                         if (task.completed) {
-                            db.addCoins(1);
                             this._playConfetti();
                             
                             // Visual slide out and fade
@@ -2331,6 +2836,47 @@ const FocusTasks = {
                 });
             }
 
+            subchecks.forEach(subcheck => {
+                subcheck.addEventListener('change', (e) => {
+                    const subRow = subcheck.closest('.subtask-row');
+                    const subId = subRow.getAttribute('data-sub-id');
+                    const tasks = db.getTasks();
+                    const task = tasks.find(t => t.id === taskId);
+                    if (task && task.subtasks) {
+                        const subtask = task.subtasks.find(s => s.id === subId);
+                        if (subtask) {
+                            const isChecking = e.target.checked;
+                            subtask.completed = isChecking;
+
+                            db.addCoins(isChecking ? 1 : -1);
+                            if (isChecking) {
+                                this._playConfetti();
+                            }
+
+                            const allCompleted = task.subtasks.every(s => s.completed);
+                            if (allCompleted) {
+                                task.completed = true;
+                                db.saveTask(task);
+
+                                row.style.opacity = '0.5';
+                                row.style.transform = 'translateX(10px)';
+                                row.style.pointerEvents = 'none';
+
+                                setTimeout(() => {
+                                    db.deleteTask(taskId);
+                                    this._refreshTasksList();
+                                    this._updateSidebarProgress();
+                                }, 1000);
+                            } else {
+                                db.saveTask(task);
+                                this._refreshTasksList();
+                                this._updateSidebarProgress();
+                            }
+                        }
+                    }
+                });
+            });
+
             if (deleteBtn) {
                 deleteBtn.addEventListener('click', () => {
                     db.deleteTask(taskId);
@@ -2339,6 +2885,44 @@ const FocusTasks = {
                 });
             }
         });
+    },
+
+    _reorderTask(taskId, direction) {
+        const tasks = db.getTasks();
+        const visibleTasks = tasks.filter(t => {
+            if (!t.completed) {
+                return t.date <= this.selectedDate;
+            } else {
+                return t.date === this.selectedDate;
+            }
+        });
+
+        const index = visibleTasks.findIndex(t => t.id === taskId);
+        if (index === -1) return;
+
+        let targetIndex = -1;
+        if (direction === 'up' && index > 0) {
+            targetIndex = index - 1;
+        } else if (direction === 'down' && index < visibleTasks.length - 1) {
+            targetIndex = index + 1;
+        }
+
+        if (targetIndex !== -1) {
+            const currentTask = visibleTasks[index];
+            const targetTask = visibleTasks[targetIndex];
+
+            const globalCurrentIndex = db.tasks.findIndex(t => t.id === currentTask.id);
+            const globalTargetIndex = db.tasks.findIndex(t => t.id === targetTask.id);
+
+            if (globalCurrentIndex !== -1 && globalTargetIndex !== -1) {
+                const temp = db.tasks[globalCurrentIndex];
+                db.tasks[globalCurrentIndex] = db.tasks[globalTargetIndex];
+                db.tasks[globalTargetIndex] = temp;
+
+                db._save('tasks', db.tasks);
+                this._refreshTasksList();
+            }
+        }
     },
 
     _updateSidebarProgress() {
@@ -2828,9 +3412,9 @@ const Blueprint = {
 
                                 <div class="form-group" style="margin-bottom: 0;">
                                     <label style="font-size: 0.78rem; font-weight: 600; display: flex; align-items: center; gap: 4px;">
-                                        <i data-lucide="zap" style="width: 13px; height: 13px; color: var(--color-success);"></i> 2-Minute Version
+                                        <i data-lucide="zap" style="width: 13px; height: 13px; color: var(--color-success);"></i> 2-Minute Version (Optional)
                                     </label>
-                                    <input type="text" id="new-habit-twomin" class="form-control" style="font-size: 0.82rem; padding: 0.45rem 0.65rem;" placeholder="Brush teeth for 30s" required>
+                                    <input type="text" id="new-habit-twomin" class="form-control" style="font-size: 0.82rem; padding: 0.45rem 0.65rem;" placeholder="Leave blank if already < 2m (e.g. drink water)">
                                 </div>
 
                                 <div class="form-group" style="margin-bottom: 0;">
@@ -2838,6 +3422,13 @@ const Blueprint = {
                                         <i data-lucide="gift" style="width: 13px; height: 13px; color: var(--primary);"></i> Immediate Reward
                                     </label>
                                     <input type="text" id="new-habit-reward" class="form-control" style="font-size: 0.82rem; padding: 0.45rem 0.65rem;" placeholder="Feeling fresh and clean" required>
+                                </div>
+
+                                <div class="form-group" style="margin-bottom: 0;">
+                                    <label style="font-size: 0.78rem; font-weight: 600; display: flex; align-items: center; gap: 4px;">
+                                        <i data-lucide="list-todo" style="width: 13px; height: 13px; color: var(--primary);"></i> Sub-actions / Checklist (Optional, one per line)
+                                    </label>
+                                    <textarea id="new-habit-subactions" class="form-control" style="font-size: 0.82rem; padding: 0.45rem 0.65rem; height: 60px; resize: vertical;" placeholder="e.g. Supplement A&#10;Supplement B"></textarea>
                                 </div>
 
                                 <button type="submit" class="btn btn-primary" style="align-self: flex-end; padding: 0.5rem 1.25rem; font-size: 0.82rem; border-radius: 12px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px;">
@@ -2943,6 +3534,7 @@ const Blueprint = {
 
             newForm.addEventListener('submit', (e) => {
                 e.preventDefault();
+                const subactionsText = this.container.querySelector('#new-habit-subactions').value.trim();
                 const createdHabit = {
                     name: this.container.querySelector('#new-habit-name').value.trim(),
                     category: this.container.querySelector('#new-habit-category').value,
@@ -2953,7 +3545,8 @@ const Blueprint = {
                     cue: this.container.querySelector('#new-habit-cue').value.trim(),
                     reward: this.container.querySelector('#new-habit-reward').value.trim(),
                     frequency: this.container.querySelector('#new-habit-frequency').value,
-                    weeklyDay: parseInt(this.container.querySelector('#new-habit-weekly-day').value)
+                    weeklyDay: parseInt(this.container.querySelector('#new-habit-weekly-day').value),
+                    subactions: subactionsText ? subactionsText.split('\n').map(s => s.trim()).filter(Boolean) : []
                 };
                 db.saveHabit(createdHabit);
                 newForm.reset();
@@ -3380,9 +3973,20 @@ const Analytics = {
                                             <span style="color: var(--text-muted);">Overall Consistency:</span>
                                             <span style="color: var(--primary);">${hs.rate}% (${hs.completed} / ${hs.possible} days)</span>
                                         </div>
-                                        <div style="width: 100%; height: 6px; background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: 4px; overflow: hidden;">
-                                            <div style="width: ${hs.rate}%; height: 100%; background: linear-gradient(90deg, var(--primary), #b8f064); border-radius: 4px;"></div>
-                                        </div>
+                                        ${hs.habit.twoMinuteVersion ? `
+                                            <div style="width: 100%; height: 6px; background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: 4px; overflow: hidden; display: flex;">
+                                                <div style="width: ${hs.possible > 0 ? Math.round(((hs.completed - hs.twoMinCount) / hs.possible) * 100) : 0}%; height: 100%; background: linear-gradient(90deg, var(--primary), #b8f064); border-radius: 4px 0 0 4px;" title="Full completions: ${hs.completed - hs.twoMinCount} days"></div>
+                                                <div style="width: ${hs.possible > 0 ? Math.round((hs.twoMinCount / hs.possible) * 100) : 0}%; height: 100%; background: linear-gradient(90deg, #6366f1, #818cf8); border-radius: ${(hs.completed - hs.twoMinCount) === 0 ? '4px' : '0'} 4px 4px ${(hs.completed - hs.twoMinCount) === 0 ? '4px' : '0'};" title="2-Min saves: ${hs.twoMinCount} days"></div>
+                                            </div>
+                                            <div style="display: flex; justify-content: space-between; font-size: 0.65rem; color: var(--text-muted); margin-top: 1px; font-weight: 500;">
+                                                <span>💪 Full: ${hs.completed - hs.twoMinCount}d (${hs.possible > 0 ? Math.round(((hs.completed - hs.twoMinCount) / hs.possible) * 100) : 0}%)</span>
+                                                <span>⚡ 2-Min: ${hs.twoMinCount}d (${hs.possible > 0 ? Math.round((hs.twoMinCount / hs.possible) * 100) : 0}%)</span>
+                                            </div>
+                                        ` : `
+                                            <div style="width: 100%; height: 6px; background: rgba(255,255,255,0.03); border: 1px solid var(--border-color); border-radius: 4px; overflow: hidden;">
+                                                <div style="width: ${hs.rate}%; height: 100%; background: linear-gradient(90deg, var(--primary), #b8f064); border-radius: 4px;"></div>
+                                            </div>
+                                        `}
                                     </div>
 
                                     <!-- Column 3: Streaks & 2-Min Rules Saved -->
@@ -3568,13 +4172,15 @@ const Analytics = {
             this.chartInstance2 = new Chart(ctx2, {
                 type: 'doughnut',
                 data: {
-                    labels: ['Health', 'Mind'],
+                    labels: ['Health', 'Mind', 'Career', 'Relations'],
                     datasets: [{
                         data: [
-                            completionsByCat.health,
-                            completionsByCat.mind
+                            completionsByCat.health || 0,
+                            completionsByCat.mind || 0,
+                            completionsByCat.career || 0,
+                            completionsByCat.relations || 0
                         ],
-                        backgroundColor: ['#1e8e3e', '#1a73e8'],
+                        backgroundColor: ['#1e8e3e', '#1a73e8', '#e37400', '#a855f7'],
                         borderWidth: isDark ? 2 : 1,
                         borderColor: isDark ? '#202124' : '#ffffff'
                     }]
@@ -4186,6 +4792,7 @@ class AppShell {
         };
         this.isLocked = !!db.settings.passwordHash;
         this.idleTimer = null;
+        this.lastAutoPullTime = 0;
     }
 
     async init() {
@@ -4207,8 +4814,14 @@ class AppShell {
     async runBackgroundSync() {
         const settings = db.getSettings();
         if (settings.sheetsUrl) {
+            const now = Date.now();
+            if (now - this.lastAutoPullTime < 60000) {
+                console.log("[AtomicFlow Sync] Throttling auto-pull. Last pull was less than 60s ago.");
+                return;
+            }
+            this.lastAutoPullTime = now;
             try {
-                console.log("[AtomicFlow Sync] Running background cloud pull on startup...");
+                console.log("[AtomicFlow Sync] Running background cloud pull...");
                 const ok = await db.pullFromGoogleSheets();
                 if (ok) {
                     console.log("[AtomicFlow Sync] Background startup pull successful! Re-rendering view...");
@@ -4749,6 +5362,10 @@ class AppShell {
         if (!activeView) {
             window.location.hash = '#dashboard';
             return;
+        }
+
+        if (this.currentView === Dashboard) {
+            Dashboard.clearAllTimers();
         }
 
         if (this.currentView === Journal) {

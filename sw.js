@@ -40,6 +40,12 @@ self.addEventListener('fetch', event => {
   // Only handle GET requests for standard caching
   if (event.request.method !== 'GET') return;
 
+  // Do NOT intercept/cache dynamic API pulls from Google Sheets or the local proxy
+  const url = event.request.url;
+  if (url.includes('script.google.com') || url.includes('googleusercontent.com') || url.includes('/api/proxy') || url.includes('action=pull')) {
+    return;
+  }
+
   event.respondWith(
     fetch(event.request)
       .then(networkResponse => {

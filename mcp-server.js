@@ -90,6 +90,13 @@ const TOOLS = [
         id: {
           type: "string",
           description: "The unique ID of the task (omit when adding a new task)."
+        },
+        subtasks: {
+          type: "array",
+          items: {
+            type: "string"
+          },
+          description: "Optional list of micro-steps or subtasks to break down a large task."
         }
       },
       required: ["text"]
@@ -144,9 +151,16 @@ const TOOLS = [
         weeklyDay: {
           type: "integer",
           description: "If frequency is 'weekly', specifies the day of week (0 = Sunday, 1 = Monday, etc.). Default is 0."
+        },
+        subactions: {
+          type: "array",
+          items: {
+            type: "string"
+          },
+          description: "Optional list of sub-actions or checklist items to group under this habit routine (e.g. ['Supplement A', 'Supplement B'])."
         }
       },
-      required: ["name", "identity", "cue", "reward", "twoMinuteVersion"]
+      required: ["name", "identity", "cue", "reward"]
     }
   },
   {
@@ -326,6 +340,14 @@ function createServerInstance() {
               };
             }
           } else {
+            let subtasks = undefined;
+            if (args.subtasks && Array.isArray(args.subtasks)) {
+              subtasks = args.subtasks.map((st, idx) => ({
+                id: 'sub_' + Date.now() + '_' + idx,
+                text: st.trim(),
+                completed: false
+              }));
+            }
             targetTask = {
               id: 't_' + Date.now(),
               text: taskText,
@@ -333,7 +355,8 @@ function createServerInstance() {
               active: isActive,
               date: new Date().toISOString().split('T')[0],
               createdAt: Date.now(),
-              updatedAt: Date.now()
+              updatedAt: Date.now(),
+              subtasks: subtasks
             };
             tasks.push(targetTask);
           }
@@ -381,6 +404,23 @@ function createServerInstance() {
           }
 
           state.habits = habits;
+          
+          // Auto-heal/register identity pillar on the server
+          if (args.identity && args.identity.trim()) {
+            const idTitle = args.identity.trim();
+            state.blueprints = state.blueprints || { identities: [], stacks: [] };
+            state.blueprints.identities = state.blueprints.identities || [];
+            const exists = state.blueprints.identities.some(i => i.title && i.title.toLowerCase() === idTitle.toLowerCase());
+            if (!exists) {
+              state.blueprints.identities.push({
+                id: 'id_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
+                title: idTitle,
+                proof: 'Reinforced by ' + (args.name || targetHabit.name)
+              });
+              state.blueprints.updatedAt = Date.now();
+            }
+          }
+
           await pushState(state);
 
           return {
