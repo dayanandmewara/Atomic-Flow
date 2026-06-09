@@ -116,6 +116,7 @@ class DatabaseManager {
             userName: 'Achiever',
             autoSync: false,
             useNetlifyProxy: false,
+            netlifyUrl: '',
             passwordHash: '',
             lockTimeout: 0, // 0 = Never
             xp: 0
@@ -158,6 +159,10 @@ class DatabaseManager {
             this._seedSampleData();
         }
         this.useProxy = !!this.settings.useNetlifyProxy;
+        if (window.location.hostname.endsWith('.netlify.app') && !this.settings.netlifyUrl) {
+            this.settings.netlifyUrl = window.location.origin;
+            this._save('settings', this.settings);
+        }
         this._healIdentityPillars();
     }
 
@@ -612,9 +617,12 @@ class DatabaseManager {
     }
 
     async testSheetsConnection(url) {
-        const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-        if (this.useProxy && !isLocal) {
-            const proxyUrl = `/api/proxy?action=test`;
+        const isLocal = window.location.hostname === 'localhost' || 
+                        window.location.hostname === '127.0.0.1' || 
+                        window.location.protocol === 'file:';
+        if (this.useProxy && (!isLocal || this.settings.netlifyUrl)) {
+            const proxyBase = (!isLocal) ? '' : (this.settings.netlifyUrl || '').replace(/\/$/, '');
+            const proxyUrl = `${proxyBase}/api/proxy?action=test`;
             try {
                 const res = await fetch(proxyUrl, {
                     headers: { 'x-target-url': url }
@@ -653,10 +661,14 @@ class DatabaseManager {
             timestamp: Date.now()
         };
 
-        const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-        if (this.useProxy && !isLocal) {
+        const isLocal = window.location.hostname === 'localhost' || 
+                        window.location.hostname === '127.0.0.1' || 
+                        window.location.protocol === 'file:';
+        if (this.useProxy && (!isLocal || this.settings.netlifyUrl)) {
             try {
-                const res = await fetch('/api/proxy', {
+                const proxyBase = (!isLocal) ? '' : (this.settings.netlifyUrl || '').replace(/\/$/, '');
+                const proxyUrl = `${proxyBase}/api/proxy`;
+                const res = await fetch(proxyUrl, {
                     method: 'POST',
                     headers: { 
                         'Content-Type': 'application/json',
@@ -690,9 +702,12 @@ class DatabaseManager {
         const url = this.settings.sheetsUrl;
         if (!url) return false;
 
-        const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-        if (this.useProxy && !isLocal) {
-            const proxyUrl = `/api/proxy?action=pull`;
+        const isLocal = window.location.hostname === 'localhost' || 
+                        window.location.hostname === '127.0.0.1' || 
+                        window.location.protocol === 'file:';
+        if (this.useProxy && (!isLocal || this.settings.netlifyUrl)) {
+            const proxyBase = (!isLocal) ? '' : (this.settings.netlifyUrl || '').replace(/\/$/, '');
+            const proxyUrl = `${proxyBase}/api/proxy?action=pull`;
             try {
                 const res = await fetch(proxyUrl, {
                     headers: { 'x-target-url': url }
@@ -4298,6 +4313,10 @@ const Settings = {
                                     <span>Route sync through Netlify Proxy</span>
                                 </label>
                             </div>
+                            <div id="netlify-url-container" style="display: ${settings.useNetlifyProxy ? 'flex' : 'none'}; flex-direction: column; gap: 0.25rem; width: 100%;">
+                                <label style="font-size: 0.72rem; font-weight: 600; color: var(--text-secondary);">Netlify App URL (for local/Capacitor proxying)</label>
+                                <input type="text" id="netlify-url-input" class="form-control" style="border-radius: 8px; font-size: 0.82rem; padding: 0.4rem 0.65rem;" value="${settings.netlifyUrl || ''}" placeholder="https://your-app-name.netlify.app">
+                            </div>
                         </div>
 
                         <div style="font-size: 0.7rem; color: var(--text-muted); display: flex; align-items: center; gap: 4px;">
@@ -4728,10 +4747,27 @@ function doPost(e) {
 
         // Proxy toggle checkbox listener
         const proxyCheckbox = this.container.querySelector('#proxy-sync-checkbox');
+        const netlifyUrlContainer = this.container.querySelector('#netlify-url-container');
         if (proxyCheckbox) {
             proxyCheckbox.addEventListener('change', (e) => {
                 db.saveSettings({ useNetlifyProxy: e.target.checked });
+                if (netlifyUrlContainer) {
+                    netlifyUrlContainer.style.display = e.target.checked ? 'flex' : 'none';
+                }
                 this._showToast(e.target.checked ? "Routing sync through Netlify Proxy." : "Routing sync directly to Google.");
+            });
+        }
+
+        const netlifyUrlInput = this.container.querySelector('#netlify-url-input');
+        if (netlifyUrlInput) {
+            netlifyUrlInput.addEventListener('change', (e) => {
+                let val = e.target.value.trim();
+                if (val && !val.startsWith('http://') && !val.startsWith('https://')) {
+                    val = 'https://' + val;
+                    netlifyUrlInput.value = val;
+                }
+                db.saveSettings({ netlifyUrl: val });
+                this._showToast("Netlify URL saved.");
             });
         }
 
