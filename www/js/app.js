@@ -4391,10 +4391,42 @@ const Settings = {
                     </h3>
                     <div style="display: flex; flex-direction: column; gap: 0.6rem;">
                         <span style="font-size: 0.78rem; color: var(--text-secondary); line-height: 1.4;">
-                            Lock apps under your habit reward rules. Enter Android package names (comma-separated) to monitor and block:
+                            Lock apps under your habit reward rules. Select apps below or enter custom Android package names:
                         </span>
+                        
+                        <!-- Quick Presets Grid -->
+                        <div style="background: rgba(255,255,255,0.01); border: 1px solid var(--border-color); border-radius: 8px; padding: 0.65rem; margin-bottom: 0.15rem;">
+                            <label style="font-size: 0.7rem; font-weight: 700; color: var(--text-secondary); margin-bottom: 0.4rem; display: block; text-transform: uppercase; letter-spacing: 0.5px;">Quick Block Presets</label>
+                            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem;">
+                                <label style="display: flex; align-items: center; gap: 6px; font-size: 0.75rem; color: var(--text-secondary); cursor: pointer; user-select: none;">
+                                    <input type="checkbox" class="preset-block-checkbox" value="com.instagram.android" style="cursor: pointer; width: 14px; height: 14px;"> Instagram
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 6px; font-size: 0.75rem; color: var(--text-secondary); cursor: pointer; user-select: none;">
+                                    <input type="checkbox" class="preset-block-checkbox" value="com.google.android.youtube" style="cursor: pointer; width: 14px; height: 14px;"> YouTube
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 6px; font-size: 0.75rem; color: var(--text-secondary); cursor: pointer; user-select: none;">
+                                    <input type="checkbox" class="preset-block-checkbox" value="com.zhiliaoapp.musically" style="cursor: pointer; width: 14px; height: 14px;"> TikTok
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 6px; font-size: 0.75rem; color: var(--text-secondary); cursor: pointer; user-select: none;">
+                                    <input type="checkbox" class="preset-block-checkbox" value="com.facebook.katana" style="cursor: pointer; width: 14px; height: 14px;"> Facebook
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 6px; font-size: 0.75rem; color: var(--text-secondary); cursor: pointer; user-select: none;">
+                                    <input type="checkbox" class="preset-block-checkbox" value="com.twitter.android" style="cursor: pointer; width: 14px; height: 14px;"> X (Twitter)
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 6px; font-size: 0.75rem; color: var(--text-secondary); cursor: pointer; user-select: none;">
+                                    <input type="checkbox" class="preset-block-checkbox" value="com.reddit.frontpage" style="cursor: pointer; width: 14px; height: 14px;"> Reddit
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 6px; font-size: 0.75rem; color: var(--text-secondary); cursor: pointer; user-select: none;">
+                                    <input type="checkbox" class="preset-block-checkbox" value="com.android.chrome" style="cursor: pointer; width: 14px; height: 14px;"> Chrome
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 6px; font-size: 0.75rem; color: var(--text-secondary); cursor: pointer; user-select: none;">
+                                    <input type="checkbox" class="preset-block-checkbox" value="com.snapchat.android" style="cursor: pointer; width: 14px; height: 14px;"> Snapchat
+                                </label>
+                            </div>
+                        </div>
+
                         <div style="display: flex; gap: 0.5rem; align-items: center;">
-                            <input type="text" id="blocked-packages-input" class="form-control" style="flex: 1; border-radius: 8px; font-size: 0.82rem; padding: 0.4rem 0.65rem;" placeholder="e.g. com.instagram.android,com.zhiliaoapp.musically" value="${settings.blockedPackages || ''}">
+                            <input type="text" id="blocked-packages-input" class="form-control" style="flex: 1; border-radius: 8px; font-size: 0.82rem; padding: 0.4rem 0.65rem;" placeholder="Custom apps: com.app.package, com.another" value="${settings.blockedPackages || ''}">
                             <button class="btn btn-primary" id="btn-save-blocker" style="padding: 0.4rem 0.85rem; border-radius: 8px; font-size: 0.78rem; white-space: nowrap;">Save Rules</button>
                         </div>
                         <div id="blocker-native-status" style="font-size: 0.7rem; color: var(--text-muted); font-weight: 600; display: flex; align-items: center; gap: 4px; margin-top: 2px;">
@@ -4581,6 +4613,42 @@ function doPost(e) {
                     this._showToast("Blocker rules saved locally.");
                 }
             });
+        }
+
+        // Initialize presets checkboxes based on text input value
+        const blockedInput = this.container.querySelector('#blocked-packages-input');
+        const presetCheckboxes = this.container.querySelectorAll('.preset-block-checkbox');
+        
+        const updateCheckboxesFromInput = () => {
+            if (!blockedInput) return;
+            const currentPackages = blockedInput.value.split(',').map(s => s.trim()).filter(s => s.length > 0);
+            presetCheckboxes.forEach(cb => {
+                cb.checked = currentPackages.includes(cb.value);
+            });
+        };
+
+        if (blockedInput) {
+            updateCheckboxesFromInput();
+            
+            // Listen for changes on checkboxes to update text input
+            presetCheckboxes.forEach(cb => {
+                cb.addEventListener('change', () => {
+                    let currentPackages = blockedInput.value.split(',').map(s => s.trim()).filter(s => s.length > 0);
+                    
+                    if (cb.checked) {
+                        if (!currentPackages.includes(cb.value)) {
+                            currentPackages.push(cb.value);
+                        }
+                    } else {
+                        currentPackages = currentPackages.filter(p => p !== cb.value);
+                    }
+                    
+                    blockedInput.value = currentPackages.join(', ');
+                });
+            });
+            
+            // Also update checkboxes if user types in the input directly
+            blockedInput.addEventListener('input', updateCheckboxesFromInput);
         }
 
         // Check native app blocker status
