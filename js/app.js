@@ -159,7 +159,7 @@ class DatabaseManager {
             this._seedSampleData();
         }
         this.useProxy = !!this.settings.useNetlifyProxy;
-        if (window.location.hostname.endsWith('.netlify.app') && !this.settings.netlifyUrl) {
+        if (window.location.hostname.endsWith('.netlify.app') && this.settings.netlifyUrl !== window.location.origin) {
             this.settings.netlifyUrl = window.location.origin;
             this._save('settings', this.settings);
         }
